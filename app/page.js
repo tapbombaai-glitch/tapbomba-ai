@@ -92,17 +92,24 @@ export default function Home() {
     return null;
   }
 
+  // Detects an App Plan using its structure,
+  // not one exact phrase.
   function isPlanReply(text) {
     if (!text) {
       return false;
     }
 
-    return (
-      /app plan/i.test(text) ||
-      /key features/i.test(text) ||
-      /user flow/i.test(text) ||
-      /design concepts/i.test(text)
-    );
+    const hasStructure =
+      /features?/i.test(text) &&
+      /design|ui|ux/i.test(text) &&
+      /next steps?|development|build/i.test(text);
+
+    const hasAppSections =
+      /product|catalog|cart|checkout|profile|user|screen|navigation/i.test(
+        text
+      );
+
+    return hasStructure || hasAppSections;
   }
 
   async function callAI({
@@ -177,6 +184,9 @@ export default function Home() {
         isPlanReply(reply)
       ) {
         setAppPlan(reply);
+        setGeneratedHtml("");
+        setShowPreview(false);
+        setCopied(false);
       }
 
       const html = extractHtmlFromReply(reply);
@@ -329,7 +339,6 @@ ${appPlan}`;
     mode === "app" &&
     appPlan &&
     lastMessage?.role === "assistant" &&
-    isPlanReply(lastMessage.content) &&
     !generatedHtml;
 
   return (
