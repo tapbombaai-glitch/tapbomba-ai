@@ -49,6 +49,7 @@ export default function Home() {
   const [generatedHtml, setGeneratedHtml] = useState("");
   const [showPreview, setShowPreview] = useState(false);
   const [building, setBuilding] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const messagesEndRef = useRef(null);
 
@@ -72,6 +73,7 @@ export default function Home() {
     setAppPlan("");
     setGeneratedHtml("");
     setShowPreview(false);
+    setCopied(false);
   }
 
   function extractHtmlFromReply(text) {
@@ -182,6 +184,7 @@ export default function Home() {
       if (mode === "app" && html) {
         setGeneratedHtml(html);
         setShowPreview(true);
+        setCopied(false);
       }
 
       setMessages((prev) => [
@@ -215,6 +218,7 @@ export default function Home() {
 
     setBuilding(true);
     setLoading(true);
+    setCopied(false);
 
     setMessages((prev) => [
       ...prev,
@@ -286,6 +290,35 @@ ${appPlan}`;
     } finally {
       setBuilding(false);
       setLoading(false);
+    }
+  }
+
+  async function handleCopyFullApp() {
+    if (!generatedHtml) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(
+        generatedHtml
+      );
+
+      setCopied(true);
+
+      setTimeout(() => {
+        setCopied(false);
+      }, 3000);
+    } catch (error) {
+      console.error(error);
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content:
+            "⚠️ I couldn't copy the app automatically. Please try again.",
+        },
+      ]);
     }
   }
 
@@ -508,6 +541,26 @@ ${appPlan}`;
             >
               📱 Live App Preview
             </h2>
+
+            <button
+              onClick={handleCopyFullApp}
+              style={{
+                width: "100%",
+                padding: "16px",
+                marginBottom: "12px",
+                borderRadius: "13px",
+                border: "none",
+                background: BRAND.accent,
+                color: "#000",
+                fontSize: "16px",
+                fontWeight: 900,
+                cursor: "pointer",
+              }}
+            >
+              {copied
+                ? "✅ Full App Copied!"
+                : "📋 Copy Full App"}
+            </button>
 
             <iframe
               title="BOMBA AI App Preview"
