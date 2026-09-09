@@ -96,8 +96,10 @@ export default function Home() {
     }
 
     return (
-      /app plan/i.test(text) &&
-      /build this app/i.test(text)
+      /app plan/i.test(text) ||
+      /key features/i.test(text) ||
+      /user flow/i.test(text) ||
+      /design concepts/i.test(text)
     );
   }
 
