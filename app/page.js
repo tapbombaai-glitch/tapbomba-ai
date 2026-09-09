@@ -426,6 +426,3 @@ Keep code modern, typed when possible, and ready to copy-paste.`,
     </div>
   );
 }
-
-
-Check this out are they the same
