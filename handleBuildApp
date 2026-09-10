@@ -1,93 +1,144 @@
 async function handleBuildApp() {
-    if (!appPlan || building) return;
+  if (!appPlan || building) return;
 
-    setBuilding(true);
-    setLoading(true);
-    setShowPreview(false);
-    setGeneratedHtml("");
+  setBuilding(true);
+  setLoading(true);
+  setShowPreview(false);
+  setGeneratedHtml("");
 
-    // Step 1
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", content: "Build This App 🚀" },
-      {
-        role: "assistant",
-        content: "🔨 Building your app...\n\n1️⃣ Reading your App Plan...",
-      },
-    ]);
-
-    await new Promise((r) => setTimeout(r, 1200));
-
-    // Step 2
+  const updateBuildMessage = (content) => {
     setMessages((prev) => [
       ...prev.slice(0, -1),
       {
         role: "assistant",
-        content:
-          "🔨 Building your app...\n\n1️⃣ Reading your App Plan... ✅\n2️⃣ Creating the interface...",
+        content,
       },
     ]);
+  };
 
-    await new Promise((r) => setTimeout(r, 1400));
+  // Start building
+  setMessages((prev) => [
+    ...prev,
+    { role: "user", content: "Build This App 🚀" },
+    {
+      role: "assistant",
+      content:
+        "🔨 Building your app...\n\n" +
+        "1️⃣ Reading your App Plan...",
+    },
+  ]);
 
-    // Step 3
-    setMessages((prev) => [
-      ...prev.slice(0, -1),
-      {
-        role: "assistant",
-        content:
-          "🔨 Building your app...\n\n1️⃣ Reading your App Plan... ✅\n2️⃣ Creating the interface... ✅\n3️⃣ Adding the requested functionality...",
-      },
-    ]);
+  await new Promise((r) => setTimeout(r, 800));
 
-    await new Promise((r) => setTimeout(r, 1500));
+  // Interface
+  updateBuildMessage(
+    "🔨 Building your app...\n\n" +
+      "1️⃣ Reading your App Plan... ✅\n" +
+      "2️⃣ Creating the interface..."
+  );
 
-    // Step 4
-    setMessages((prev) => [
-      ...prev.slice(0, -1),
-      {
-        role: "assistant",
-        content:
-          "🔨 Building your app...\n\n1️⃣ Reading your App Plan... ✅\n2️⃣ Creating the interface... ✅\n3️⃣ Adding the requested functionality... ✅\n4️⃣ Preparing your live app preview...",
-      },
-    ]);
+  await new Promise((r) => setTimeout(r, 900));
 
-    try {
-      const reply = await callAI({
-        userContent: `BUILD THE APPLICATION NOW using this App Plan:\n\n${appPlan}\n\nReturn ONLY one complete HTML application. Start with <!DOCTYPE html> and end with </html>.`,
-        system: MODES.app.system,
-      });
+  // Functionality
+  updateBuildMessage(
+    "🔨 Building your app...\n\n" +
+      "1️⃣ Reading your App Plan... ✅\n" +
+      "2️⃣ Creating the interface... ✅\n" +
+      "3️⃣ Adding the requested functionality..."
+  );
 
-      const html = extractHtml(reply);
+  await new Promise((r) => setTimeout(r, 900));
 
-      if (html) {
-        setGeneratedHtml(html);
-        setShowPreview(true);
+  // Preparing preview
+  updateBuildMessage(
+    "🔨 Building your app...\n\n" +
+      "1️⃣ Reading your App Plan... ✅\n" +
+      "2️⃣ Creating the interface... ✅\n" +
+      "3️⃣ Adding the requested functionality... ✅\n" +
+      "4️⃣ Preparing your live app preview..."
+  );
 
-        setMessages((prev) => [
-          ...prev.slice(0, -1),
-          {
-            role: "assistant",
-            content:
-              "✅ Your app has been built successfully!\n\nYour live app is now ready below.",
-          },
-        ]);
-      } else {
-        setMessages((prev) => [
-          ...prev.slice(0, -1),
-          {
-            role: "assistant",
-            content: "⚠️ Could not generate the full app. Please try building again.",
-          },
-        ]);
-      }
-    } catch (err) {
-      setMessages((prev) => [
-        ...prev.slice(0, -1),
-        { role: "assistant", content: "⚠️ Build failed. Please try again." },
-      ]);
-    } finally {
-      setBuilding(false);
-      setLoading(false);
+  try {
+    const reply = await callAI({
+      userContent: `
+BUILD THIS APPLICATION NOW.
+
+You are BOMBA AI App Builder.
+
+Use the App Plan below as the source of truth:
+
+================ APP PLAN ================
+
+${appPlan}
+
+===========================================
+
+YOUR JOB:
+
+Create a complete, working application from this plan.
+
+IMPORTANT:
+
+1. Do not only describe the application.
+2. Do not return instructions about how to build it.
+3. Actually build the application.
+4. The application must be usable immediately in the preview.
+5. Make the UI modern, professional and mobile-friendly.
+6. Include navigation where appropriate.
+7. Include working buttons and interactions.
+8. Use realistic sample data where the plan requires data.
+9. Make the application responsive on phones and desktop.
+10. Do not leave major sections empty.
+11. Do not use placeholder text such as "Coming Soon" for requested features.
+12. Keep everything inside ONE HTML document.
+13. Use HTML, CSS and JavaScript in the same document.
+14. Do not use Markdown fences.
+15. Do not explain your answer.
+
+RETURN ONLY THE COMPLETE HTML APPLICATION.
+
+It MUST:
+
+- Start with <!DOCTYPE html>
+- End with </html>
+      `,
+      system: MODES.app.system,
+    });
+
+    const html = extractHtml(reply);
+
+    if (!html || html.length < 500) {
+      throw new Error("Incomplete application generated");
     }
+
+    // Show the generated application
+    setGeneratedHtml(html);
+    setShowPreview(true);
+
+    setMessages((prev) => [
+      ...prev.slice(0, -1),
+      {
+        role: "assistant",
+        content:
+          "✅ Your app has been built successfully!\n\n" +
+          "🚀 Live preview is ready below.\n\n" +
+          "You can test the app and then tell me what you want to change.",
+      },
+    ]);
+  } catch (err) {
+    console.error("App Builder error:", err);
+
+    setMessages((prev) => [
+      ...prev.slice(0, -1),
+      {
+        role: "assistant",
+        content:
+          "⚠️ I couldn't finish building the app.\n\n" +
+          "Please try again. If the problem continues, we can fix the App Builder connection.",
+      },
+    ]);
+  } finally {
+    setBuilding(false);
+    setLoading(false);
   }
+}
