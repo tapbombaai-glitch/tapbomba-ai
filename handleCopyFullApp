@@ -1,0 +1,13 @@
+function handleDownloadApp() {
+  if (!generatedHtml) return;
+
+  const blob = new Blob([generatedHtml], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "bomba-app.html";   // you can make this dynamic later
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
