@@ -17,7 +17,7 @@ placeholder: "Tell BOMBA AI what content you need...",
 welcome:
 "✨ Content Creator Mode ON\n\nTell me what you want to create. I can help with social media posts, captions, adverts, product descriptions, promotional messages, and business content.",
 system:
-"You are BOMBA AI Content Creator. Help Nigerian and African businesses create practical social media posts, captions, adverts, product descriptions, promotional messages and business content.",
+"You are BOMBA AI Content Creator. Help Nigerian and African businesses create practical social media posts, captions, adverts, product descriptions, promotional messages and business content. Do not invent websites, phone numbers, prices, addresses or other business details that the user did not provide.",
 },
 
 flyer: {
@@ -26,9 +26,9 @@ icon: "🎨",
 description: "Create • Square • Download",
 placeholder: "Describe the flyer you want...",
 welcome:
-"🎨 Flyer Generator ON\n\nCreate a professional square 1:1 flyer for your business, product, event, promotion or service.",
+"🎨 Flyer Generator ON\n\nDescribe the flyer you want and BOMBA AI will generate the actual square visual flyer.",
 system:
-"You are BOMBA AI Flyer Generator. Help users plan professional square 1:1 promotional flyers. Focus only on flyer content, layout, headline, description, price, contact information and visual direction.",
+"You are BOMBA AI's visual Flyer Generator. When the user asks for a flyer, generate ONE complete SVG flyer. The SVG MUST have viewBox='0 0 1080 1080', width='1080', height='1080', and be a professional square 1:1 design. Use the user's requested colors, style, business, text, images/icons represented with SVG shapes, and layout. Never give instructions for Canva or other software. Never return a design tutorial. Return ONLY the complete SVG code, beginning with <svg and ending with </svg>. Do not use external images, external CSS, JavaScript, or external fonts.",
 },
 
 app: {
@@ -41,7 +41,8 @@ welcome:
 system:
 "You are BOMBA AI Universal App Builder.\n\n" +
 "Use the user's latest app request as the current specification.\n" +
-"Do not unnecessarily reuse unrelated older requests.\n\n" +
+"Do not unnecessarily reuse unrelated older requests.\n" +
+"If the user gives an incomplete idea, make sensible professional assumptions instead of repeatedly asking questions.\n\n" +
 "FIRST create a clear App Plan containing:\n" +
 "- App name\n" +
 "- Purpose\n" +
@@ -65,9 +66,9 @@ icon: "🪪",
 description: "Brand • Logo • Identity",
 placeholder: "Describe the logo you want...",
 welcome:
-"🪪 Logo Generator ON\n\nTell me your business name and the style you want. I can create a professional logo concept for your brand.",
+"🪪 Logo Generator ON\n\nDescribe your brand and the logo you want. BOMBA AI will generate the actual logo.",
 system:
-"You are BOMBA AI Logo Generator. Create professional logo concepts for businesses and brands. Focus only on brand name, symbol, typography, style, layout and colors. When requested to generate a logo, return a complete SVG logo.",
+"You are BOMBA AI's visual Logo Generator. When the user asks for a logo, generate ONE complete professional SVG logo. The SVG must be self-contained and scalable. Use the user's requested brand name, colors, style, typography, symbols and design direction. Support ANY color combination and ANY professional logo style: minimalist, luxury, modern, playful, elegant, tech, agricultural, fashion, food, sports, birthday, event, abstract, emblem, monogram, mascot-style using SVG shapes, etc. Never give instructions for Canva or other software. Never return a design tutorial. Return ONLY the complete SVG code, beginning with <svg and ending with </svg>. Do not use external images, external CSS, JavaScript, or external fonts.",
 },
 };
 
@@ -84,6 +85,7 @@ content:
 ]);
 
 const [loading, setLoading] = useState(false);
+
 const [appPlan, setAppPlan] = useState("");
 const [generatedHtml, setGeneratedHtml] = useState("");
 const [showPreview, setShowPreview] = useState(false);
@@ -95,6 +97,9 @@ const [buildStage, setBuildStage] = useState("");
 const [logoSvg, setLogoSvg] = useState("");
 const [showLogo, setShowLogo] = useState(false);
 
+const [flyerSvg, setFlyerSvg] = useState("");
+const [showFlyer, setShowFlyer] = useState(false);
+
 const [copied, setCopied] = useState(false);
 const [copiedMessageIndex, setCopiedMessageIndex] = useState(null);
 
@@ -102,7 +107,7 @@ const messagesEndRef = useRef(null);
 
 useEffect(() => {
 document.body.style.margin = "0";
-document.body.style.background = "#000";
+document.body.style.background = "#030303";
 document.body.style.color = "#fff";
 
 return () => {
@@ -117,7 +122,13 @@ useEffect(() => {
 messagesEndRef.current?.scrollIntoView({
 behavior: "smooth",
 });
-}, [messages, loading, showPreview, showLogo]);
+}, [
+messages,
+loading,
+showPreview,
+showLogo,
+showFlyer,
+]);
 
 function switchMode(newMode) {
 setMode(newMode);
@@ -137,6 +148,9 @@ setShowPreview(false);
 setLogoSvg("");
 setShowLogo(false);
 
+setFlyerSvg("");
+setShowFlyer(false);
+
 setCopied(false);
 setCopiedMessageIndex(null);
 
@@ -150,22 +164,30 @@ setLoading(false);
 function extractHtmlFromReply(text) {
 if (!text) return null;
 
-const fenced = text.match(/```html\s*([\s\S]*?)```/i);
+const fenced = text.match(
+  /```html\s*([\s\S]*?)```/i
+);
 
 if (fenced?.[1]) {
   return fenced[1].trim();
 }
 
-const generic = text.match(/```\s*([\s\S]*?)```/);
+const generic = text.match(
+  /```\s*([\s\S]*?)```/
+);
 
 if (
   generic?.[1] &&
-  /<(!doctype|html|head|body)/i.test(generic[1])
+  /<(!doctype|html|head|body)/i.test(
+    generic[1]
+  )
 ) {
   return generic[1].trim();
 }
 
-const start = text.search(/<!doctype html|<html[\s>]/i);
+const start = text.search(
+  /<!doctype html|<html[\s>]/i
+);
 
 if (start >= 0) {
   const html = text.slice(start).trim();
@@ -183,17 +205,37 @@ return null;
 function extractSvgFromReply(text) {
 if (!text) return null;
 
-const fenced = text.match(/```svg\s*([\s\S]*?)```/i);
+const fenced = text.match(
+  /```(?:svg|xml)?\s*([\s\S]*?)```/i
+);
 
-if (fenced?.[1] && /<svg[\s>]/i.test(fenced[1])) {
-  return fenced[1].trim();
+if (
+  fenced?.[1] &&
+  /<svg[\s>]/i.test(fenced[1])
+) {
+  const start = fenced[1].search(
+    /<svg[\s>]/i
+  );
+
+  const svg = fenced[1].slice(start).trim();
+
+  const end = svg.search(
+    /<\/svg>\s*$/i
+  );
+
+  if (end >= 0) {
+    return svg.slice(0, end + 6).trim();
+  }
 }
 
 const start = text.search(/<svg[\s>]/i);
 
 if (start >= 0) {
   const svg = text.slice(start).trim();
-  const end = svg.search(/<\/svg>\s*$/i);
+
+  const end = svg.search(
+    /<\/svg>\s*$/i
+  );
 
   if (end >= 0) {
     return svg.slice(0, end + 6).trim();
@@ -213,7 +255,9 @@ const hasPlan =
   );
 
 const containsHtml =
-  /<!doctype html|<html[\s>]|```html/i.test(text);
+  /<!doctype html|<html[\s>]|```html/i.test(
+    text
+  );
 
 return !containsHtml && hasPlan;
 
@@ -236,12 +280,15 @@ let data;
 try {
   data = await response.json();
 } catch {
-  throw new Error("The AI server returned an invalid response.");
+  throw new Error(
+    "The AI server returned an invalid response."
+  );
 }
 
 if (!response.ok) {
   throw new Error(
-    data?.error || "The AI server returned an error."
+    data?.error ||
+      "The AI server returned an error."
   );
 }
 
@@ -287,6 +334,11 @@ if (mode === "logo") {
   setShowLogo(false);
 }
 
+if (mode === "flyer") {
+  setFlyerSvg("");
+  setShowFlyer(false);
+}
+
 try {
   const reply = await callAI({
     userContent: trimmed,
@@ -313,15 +365,47 @@ try {
     }
   }
 
-  setMessages((prev) => [
-    ...prev,
-    {
-      role: "assistant",
-      content: reply || "No response received.",
-    },
-  ]);
+  if (mode === "flyer") {
+    const svg = extractSvgFromReply(reply);
+
+    if (svg) {
+      setFlyerSvg(svg);
+      setShowFlyer(true);
+    }
+  }
+
+  if (
+    (mode === "flyer" ||
+      mode === "logo") &&
+    !extractSvgFromReply(reply)
+  ) {
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "assistant",
+        content:
+          "⚠️ I received a response, but it was not a complete visual design. Please try generating it again.",
+      },
+    ]);
+  } else {
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "assistant",
+        content:
+          mode === "flyer"
+            ? "🎨 Your square flyer has been generated below."
+            : mode === "logo"
+            ? "🪪 Your logo has been generated below."
+            : reply || "No response received.",
+      },
+    ]);
+  }
 } catch (error) {
-  console.error("BOMBA AI error:", error);
+  console.error(
+    "BOMBA AI error:",
+    error
+  );
 
   setMessages((prev) => [
     ...prev,
@@ -384,8 +468,13 @@ const progressTimer = setInterval(() => {
 
   if (stageIndex < stages.length) {
     setBuildStage(stages[stageIndex]);
+
     setBuildProgress(
-      Math.round((stageIndex / stages.length) * 90)
+      Math.round(
+        (stageIndex /
+          stages.length) *
+          90
+      )
     );
   }
 }, 700);
@@ -421,11 +510,15 @@ try {
 
   clearInterval(progressTimer);
 
-  const html = extractHtmlFromReply(reply);
+  const html =
+    extractHtmlFromReply(reply);
 
   if (html) {
     setBuildProgress(100);
-    setBuildStage("Build complete — preparing preview");
+    setBuildStage(
+      "Build complete — preparing preview"
+    );
+
     setGeneratedHtml(html);
     setShowPreview(true);
 
@@ -450,7 +543,10 @@ try {
 } catch (error) {
   clearInterval(progressTimer);
 
-  console.error("App build error:", error);
+  console.error(
+    "App build error:",
+    error
+  );
 
   setMessages((prev) => [
     ...prev,
@@ -467,14 +563,21 @@ try {
 
 }
 
-async function copyToClipboard(text, messageIndex = null) {
+async function copyToClipboard(
+text,
+messageIndex = null
+) {
 if (!text) return;
 
 try {
-  await navigator.clipboard.writeText(text);
+  await navigator.clipboard.writeText(
+    text
+  );
 
   if (messageIndex !== null) {
-    setCopiedMessageIndex(messageIndex);
+    setCopiedMessageIndex(
+      messageIndex
+    );
 
     setTimeout(() => {
       setCopiedMessageIndex(null);
@@ -488,20 +591,31 @@ try {
   }
 } catch {
   try {
-    const textarea = document.createElement("textarea");
+    const textarea =
+      document.createElement(
+        "textarea"
+      );
 
     textarea.value = text;
-    textarea.style.position = "fixed";
-    textarea.style.left = "-9999px";
+    textarea.style.position =
+      "fixed";
+    textarea.style.left =
+      "-9999px";
 
-    document.body.appendChild(textarea);
+    document.body.appendChild(
+      textarea
+    );
 
     textarea.focus();
     textarea.select();
 
-    document.execCommand("copy");
+    document.execCommand(
+      "copy"
+    );
 
-    document.body.removeChild(textarea);
+    document.body.removeChild(
+      textarea
+    );
 
     setCopied(true);
 
@@ -522,49 +636,63 @@ try {
 
 }
 
-function handleDownloadApp() {
-if (!generatedHtml) return;
+function downloadTextFile(
+content,
+filename,
+type
+) {
+if (!content) return;
 
-const blob = new Blob([generatedHtml], {
-  type: "text/html;charset=utf-8",
-});
+const blob = new Blob(
+  [content],
+  { type }
+);
 
-const url = URL.createObjectURL(blob);
-const link = document.createElement("a");
+const url =
+  URL.createObjectURL(blob);
+
+const link =
+  document.createElement("a");
 
 link.href = url;
-link.download = "bomba-app.html";
+link.download = filename;
 
 document.body.appendChild(link);
+
 link.click();
+
 document.body.removeChild(link);
 
 URL.revokeObjectURL(url);
 
+}
+
+function handleDownloadApp() {
+downloadTextFile(
+generatedHtml,
+"bomba-app.html",
+"text/html;charset=utf-8"
+);
 }
 
 function downloadLogo() {
-if (!logoSvg) return;
-
-const blob = new Blob([logoSvg], {
-  type: "image/svg+xml;charset=utf-8",
-});
-
-const url = URL.createObjectURL(blob);
-const link = document.createElement("a");
-
-link.href = url;
-link.download = "bomba-logo.svg";
-
-document.body.appendChild(link);
-link.click();
-document.body.removeChild(link);
-
-URL.revokeObjectURL(url);
-
+downloadTextFile(
+logoSvg,
+"bomba-logo.svg",
+"image/svg+xml;charset=utf-8"
+);
 }
 
-const lastMessage = messages[messages.length - 1];
+function downloadFlyer() {
+downloadTextFile(
+flyerSvg,
+"bomba-flyer.svg",
+"image/svg+xml;charset=utf-8"
+);
+}
+
+const lastMessage =
+messages[messages.length - 1];
 
 const showBuildButton =
 mode === "app" &&
@@ -578,58 +706,77 @@ return (
 style={{
 minHeight: "100vh",
 background:
-"radial-gradient(circle at 50% -10%, #202020 0%, #090909 38%, #000 78%)",
+"radial-gradient(circle at 50% -10%, #242424 0%, #090909 35%, #020202 72%, #000 100%)",
 color: "#fff",
 fontFamily:
 "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
 paddingBottom: "105px",
 }}
 >
-{/* MAIN BOMBA AI BRAND */}
+{/* HEADER /}
 <header
 style={{
-padding: "24px 18px 20px",
+padding:
+"24px 18px 20px",
 textAlign: "center",
-borderBottom: "1px solid #242424",
-background: "rgba(0,0,0,.88)",
+borderBottom:
+"1px solid #242424",
+background:
+"rgba(0,0,0,.9)",
 position: "sticky",
 top: 0,
 zIndex: 50,
-backdropFilter: "blur(14px)",
+backdropFilter:
+"blur(14px)",
 }}
 >
+{/ PROFESSIONAL TB MARK */}
 <div
 style={{
-width: "72px",
-height: "72px",
-margin: "0 auto 12px",
-borderRadius: "22px",
+width: "76px",
+height: "76px",
+margin:
+"0 auto 12px",
+borderRadius: "24px",
 background:
-"linear-gradient(145deg,#FFE477 0%,#FFD43B 45%,#E5A900 100%)",
+"linear-gradient(145deg,#161616,#050505)",
+border:
+"1px solid #FFD43B",
 display: "flex",
 alignItems: "center",
 justifyContent: "center",
-position: "relative",
+position:
+"relative",
 boxShadow:
-"0 12px 40px rgba(255,212,59,.18)",
+"0 14px 45px rgba(255,212,59,.16)",
+overflow: "hidden",
 }}
 >
 <div
 style={{
-position: "absolute",
-inset: "5px",
-borderRadius: "18px",
-border: "1px solid rgba(0,0,0,.22)",
+position:
+"absolute",
+inset: "7px",
+borderRadius:
+"19px",
+border:
+"1px solid rgba(255,212,59,.25)",
 }}
 />
 
       <div
         style={{
-          color: "#050505",
-          fontSize: "26px",
-          fontWeight: 1000,
-          letterSpacing: "-2.5px",
-          position: "relative",
+          color:
+            BRAND.accent,
+          fontSize:
+            "27px",
+          fontWeight:
+            1000,
+          letterSpacing:
+            "-3px",
+          position:
+            "relative",
+          zIndex: 2,
         }}
       >
         TB
@@ -637,13 +784,22 @@ border: "1px solid rgba(0,0,0,.22)",
 
       <div
         style={{
-          position: "absolute",
-          right: "9px",
-          bottom: "9px",
-          width: "7px",
-          height: "7px",
-          borderRadius: "50%",
-          background: "#050505",
+          position:
+            "absolute",
+          right:
+            "11px",
+          bottom:
+            "11px",
+          width:
+            "8px",
+          height:
+            "8px",
+          borderRadius:
+            "50%",
+          background:
+            BRAND.accent,
+          boxShadow:
+            "0 0 12px rgba(255,212,59,.8)",
         }}
       />
     </div>
@@ -651,19 +807,33 @@ border: "1px solid rgba(0,0,0,.22)",
     <h1
       style={{
         margin: 0,
-        fontSize: "32px",
-        fontWeight: 950,
-        letterSpacing: "-1.2px",
+        fontSize:
+          "32px",
+        fontWeight:
+          950,
+        letterSpacing:
+          "-1.2px",
       }}
     >
-      BOMBA <span style={{ color: BRAND.accent }}>AI</span>
+      BOMBA{" "}
+      <span
+        style={{
+          color:
+            BRAND.accent,
+        }}
+      >
+        AI
+      </span>
     </h1>
 
     <p
       style={{
-        margin: "7px 0 0",
-        color: "#999",
-        fontSize: "14px",
+        margin:
+          "7px 0 0",
+        color:
+          "#999",
+        fontSize:
+          "14px",
       }}
     >
       {BRAND.tagline}
@@ -672,204 +842,584 @@ border: "1px solid rgba(0,0,0,.22)",
 
   <section
     style={{
-      maxWidth: "900px",
-      margin: "0 auto",
-      padding: "18px",
+      maxWidth:
+        "900px",
+      margin:
+        "0 auto",
+      padding:
+        "18px",
     }}
   >
     {/* FOUR TOOLS */}
     <div
       style={{
-        display: "grid",
+        display:
+          "grid",
         gridTemplateColumns:
           "repeat(2,minmax(0,1fr))",
-        gap: "10px",
-        marginBottom: "22px",
+        gap:
+          "10px",
+        marginBottom:
+          "22px",
       }}
     >
-      {Object.entries(MODES).map(([key, item]) => (
-        <button
-          key={key}
-          type="button"
-          onClick={() => switchMode(key)}
-          style={{
-            padding: "15px 9px",
-            borderRadius: "15px",
-            border:
-              mode === key
-                ? "2px solid #FFD43B"
-                : "1px solid #292929",
-            background:
-              mode === key
-                ? "linear-gradient(145deg,#FFD43B,#EBAF00)"
-                : "#101010",
-            color:
-              mode === key ? "#000" : "#fff",
-            fontWeight: 850,
-            cursor: "pointer",
-            boxShadow:
-              mode === key
-                ? "0 8px 28px rgba(255,212,59,.12)"
-                : "none",
-          }}
-        >
-          <div>
-            {item.icon} {item.name}
-          </div>
-
-          <small
+      {Object.entries(
+        MODES
+      ).map(
+        ([key, item]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() =>
+              switchMode(
+                key
+              )
+            }
             style={{
-              display: "block",
-              marginTop: "5px",
-              opacity: 0.65,
-              fontWeight: 500,
+              padding:
+                "15px 9px",
+              borderRadius:
+                "15px",
+              border:
+                mode === key
+                  ? "2px solid #FFD43B"
+                  : "1px solid #292929",
+              background:
+                mode === key
+                  ? "linear-gradient(145deg,#FFD43B,#EBAF00)"
+                  : "#101010",
+              color:
+                mode === key
+                  ? "#000"
+                  : "#fff",
+              fontWeight:
+                850,
+              cursor:
+                "pointer",
+              boxShadow:
+                mode === key
+                  ? "0 8px 28px rgba(255,212,59,.12)"
+                  : "none",
             }}
           >
-            {item.description}
-          </small>
-        </button>
-      ))}
+            <div>
+              {item.icon}{" "}
+              {item.name}
+            </div>
+
+            <small
+              style={{
+                display:
+                  "block",
+                marginTop:
+                  "5px",
+                opacity:
+                  0.65,
+                fontWeight:
+                  500,
+              }}
+            >
+              {
+                item.description
+              }
+            </small>
+          </button>
+        )
+      )}
     </div>
 
-    {/* FLYER QUICK START */}
+    {/* FLYER GENERATOR INTRO */}
     {mode === "flyer" && (
       <div
         style={{
-          marginBottom: "18px",
-          padding: "15px",
-          borderRadius: "16px",
-          background: "#0d0d0d",
-          border: "1px solid #292929",
+          marginBottom:
+            "18px",
+          padding:
+            "16px",
+          borderRadius:
+            "17px",
+          background:
+            "linear-gradient(145deg,#111,#080808)",
+          border:
+            "1px solid #292929",
         }}
       >
         <div
           style={{
-            color: BRAND.accent,
-            fontWeight: 900,
-            marginBottom: "6px",
+            color:
+              BRAND.accent,
+            fontWeight:
+              900,
+            marginBottom:
+              "6px",
+            fontSize:
+              "16px",
           }}
         >
-          🎨 Square Flyer
+          🎨 Create Your Flyer
         </div>
 
         <div
           style={{
-            color: "#aaa",
-            fontSize: "13px",
-            lineHeight: 1.5,
+            color:
+              "#aaa",
+            fontSize:
+              "13px",
+            lineHeight:
+              1.55,
           }}
         >
-          Ask BOMBA AI for the flyer content and design.
-          Your flyer direction is designed for a square
-          1:1 format.
+          Describe your business,
+          event, product,
+          colors, style,
+          headline and any
+          other details. BOMBA
+          AI will create the
+          actual square 1:1
+          visual.
         </div>
       </div>
     )}
 
-    {/* CHAT */}
-    {messages.map((msg, index) => (
+    {/* LOGO GENERATOR INTRO */}
+    {mode === "logo" && (
       <div
-        key={index}
         style={{
-          marginBottom: "16px",
-          textAlign:
-            msg.role === "user" ? "right" : "left",
+          marginBottom:
+            "18px",
+          padding:
+            "16px",
+          borderRadius:
+            "17px",
+          background:
+            "linear-gradient(145deg,#111,#080808)",
+          border:
+            "1px solid #292929",
         }}
       >
         <div
           style={{
-            display: "inline-block",
-            maxWidth: "92%",
-            padding: "14px 16px",
-            borderRadius: "16px",
-            background:
-              msg.role === "user"
-                ? "#1b1b1b"
-                : "#0d0d0d",
-            border: "1px solid #252525",
-            whiteSpace: "pre-wrap",
-            lineHeight: 1.55,
-            textAlign: "left",
+            color:
+              BRAND.accent,
+            fontWeight:
+              900,
+            marginBottom:
+              "6px",
+            fontSize:
+              "16px",
           }}
         >
-          {msg.content}
+          🪪 Create Your Logo
+        </div>
 
-          {msg.role === "assistant" && (
-            <div style={{ marginTop: "10px" }}>
-              <button
-                type="button"
-                onClick={() =>
-                  copyToClipboard(msg.content, index)
-                }
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: "9px",
-                  border: "1px solid #303030",
-                  background: "#171717",
-                  color: "#ddd",
-                  fontSize: "13px",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                }}
-              >
-                {copiedMessageIndex === index
-                  ? "✅ Copied!"
-                  : "📋 Copy Answer"}
-              </button>
-            </div>
-          )}
+        <div
+          style={{
+            color:
+              "#aaa",
+            fontSize:
+              "13px",
+            lineHeight:
+              1.55,
+          }}
+        >
+          Describe your brand,
+          colors, symbol,
+          typography and
+          preferred style. You
+          can use any colors and
+          any professional logo
+          direction.
         </div>
       </div>
-    ))}
+    )}
+
+    {/* CHAT MESSAGES */}
+    {messages.map(
+      (msg, index) => (
+        <div
+          key={index}
+          style={{
+            marginBottom:
+              "16px",
+            textAlign:
+              msg.role ===
+              "user"
+                ? "right"
+                : "left",
+          }}
+        >
+          <div
+            style={{
+              display:
+                "inline-block",
+              maxWidth:
+                "92%",
+              padding:
+                "14px 16px",
+              borderRadius:
+                "16px",
+              background:
+                msg.role ===
+                "user"
+                  ? "#1b1b1b"
+                  : "#0d0d0d",
+              border:
+                "1px solid #252525",
+              whiteSpace:
+                "pre-wrap",
+              lineHeight:
+                1.55,
+              textAlign:
+                "left",
+            }}
+          >
+            {msg.content}
+
+            {msg.role ===
+              "assistant" && (
+              <div
+                style={{
+                  marginTop:
+                    "10px",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() =>
+                    copyToClipboard(
+                      msg.content,
+                      index
+                    )
+                  }
+                  style={{
+                    padding:
+                      "8px 12px",
+                    borderRadius:
+                      "9px",
+                    border:
+                      "1px solid #303030",
+                    background:
+                      "#171717",
+                    color:
+                      "#ddd",
+                    fontSize:
+                      "13px",
+                    fontWeight:
+                      700,
+                    cursor:
+                      "pointer",
+                  }}
+                >
+                  {copiedMessageIndex ===
+                  index
+                    ? "✅ Copied!"
+                    : "📋 Copy Answer"}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )
+    )}
+
+    {/* FLYER PREVIEW */}
+    {showFlyer &&
+      flyerSvg && (
+        <section
+          style={{
+            marginTop:
+              "20px",
+            padding:
+              "14px",
+            borderRadius:
+              "18px",
+            background:
+              "#0b0b0b",
+            border:
+              "1px solid #FFD43B",
+          }}
+        >
+          <h2
+            style={{
+              margin:
+                "2px 0 12px",
+              color:
+                BRAND.accent,
+              fontSize:
+                "20px",
+            }}
+          >
+            🎨 Your Generated Flyer
+          </h2>
+
+          <div
+            style={{
+              width:
+                "100%",
+              maxWidth:
+                "650px",
+              margin:
+                "0 auto",
+              aspectRatio:
+                "1 / 1",
+              background:
+                "#fff",
+              borderRadius:
+                "12px",
+              overflow:
+                "hidden",
+              boxShadow:
+                "0 15px 45px rgba(0,0,0,.5)",
+            }}
+          >
+            <div
+              style={{
+                width:
+                  "100%",
+                height:
+                  "100%",
+              }}
+              dangerouslySetInnerHTML={{
+                __html:
+                  flyerSvg,
+              }}
+            />
+          </div>
+
+          <div
+            style={{
+              display:
+                "flex",
+              gap:
+                "10px",
+              marginTop:
+                "12px",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() =>
+                copyToClipboard(
+                  flyerSvg
+                )
+              }
+              style={{
+                flex: 1,
+                padding:
+                  "14px 8px",
+                borderRadius:
+                  "13px",
+                border:
+                  "none",
+                background:
+                  BRAND.accent,
+                color:
+                  "#000",
+                fontWeight:
+                  900,
+                cursor:
+                  "pointer",
+              }}
+            >
+              📋 Copy SVG
+            </button>
+
+            <button
+              type="button"
+              onClick={
+                downloadFlyer
+              }
+              style={{
+                flex: 1,
+                padding:
+                  "14px 8px",
+                borderRadius:
+                  "13px",
+                border:
+                  "2px solid #FFD43B",
+                background:
+                  "#171717",
+                color:
+                  BRAND.accent,
+                fontWeight:
+                  900,
+                cursor:
+                  "pointer",
+              }}
+            >
+              ⬇️ Download
+            </button>
+          </div>
+        </section>
+      )}
+
+    {/* LOGO PREVIEW */}
+    {showLogo &&
+      logoSvg && (
+        <section
+          style={{
+            marginTop:
+              "20px",
+            padding:
+              "16px",
+            borderRadius:
+              "18px",
+            background:
+              "linear-gradient(145deg,#111,#080808)",
+            border:
+              "1px solid #FFD43B",
+          }}
+        >
+          <h2
+            style={{
+              margin:
+                "0 0 12px",
+              color:
+                BRAND.accent,
+            }}
+          >
+            🪪 Your Generated Logo
+          </h2>
+
+          <div
+            style={{
+              width:
+                "100%",
+              maxWidth:
+                "650px",
+              margin:
+                "0 auto",
+              aspectRatio:
+                "1 / 1",
+              borderRadius:
+                "15px",
+              background:
+                "#fff",
+              display:
+                "flex",
+              alignItems:
+                "center",
+              justifyContent:
+                "center",
+              overflow:
+                "hidden",
+              padding:
+                "10px",
+              boxSizing:
+                "border-box",
+            }}
+            dangerouslySetInnerHTML={{
+              __html:
+                logoSvg,
+            }}
+          />
+
+          <button
+            type="button"
+            onClick={
+              downloadLogo
+            }
+            style={{
+              width:
+                "100%",
+              marginTop:
+                "12px",
+              padding:
+                "15px",
+              borderRadius:
+                "13px",
+              border:
+                "none",
+              background:
+                BRAND.accent,
+              color:
+                "#000",
+              fontWeight:
+                900,
+              cursor:
+                "pointer",
+            }}
+          >
+            ⬇️ Download Logo
+          </button>
+        </section>
+      )}
 
     {/* APP BUILD PROGRESS */}
     {building && (
       <div
         style={{
-          margin: "18px 0",
-          padding: "18px",
-          borderRadius: "17px",
-          background: "#0c0c0c",
-          border: "1px solid #FFD43B",
+          margin:
+            "18px 0",
+          padding:
+            "18px",
+          borderRadius:
+            "17px",
+          background:
+            "#0c0c0c",
+          border:
+            "1px solid #FFD43B",
         }}
       >
         <div
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            marginBottom: "10px",
-            fontWeight: 850,
+            display:
+              "flex",
+            justifyContent:
+              "space-between",
+            marginBottom:
+              "10px",
+            fontWeight:
+              850,
           }}
         >
-          <span>🚀 Building App</span>
-          <span style={{ color: BRAND.accent }}>
+          <span>
+            🚀 Building App
+          </span>
+
+          <span
+            style={{
+              color:
+                BRAND.accent,
+            }}
+          >
             {buildProgress}%
           </span>
         </div>
 
         <div
           style={{
-            height: "9px",
-            borderRadius: "99px",
-            background: "#222",
-            overflow: "hidden",
+            height:
+              "9px",
+            borderRadius:
+              "99px",
+            background:
+              "#222",
+            overflow:
+              "hidden",
           }}
         >
           <div
             style={{
               width: `${buildProgress}%`,
-              height: "100%",
-              background: BRAND.accent,
-              transition: "width .4s ease",
+              height:
+                "100%",
+              background:
+                BRAND.accent,
+              transition:
+                "width .4s ease",
             }}
           />
         </div>
 
         <div
           style={{
-            marginTop: "12px",
-            color: "#bbb",
-            fontSize: "14px",
+            marginTop:
+              "12px",
+            color:
+              "#bbb",
+            fontSize:
+              "14px",
           }}
         >
           {buildStage}
@@ -877,36 +1427,58 @@ border: "1px solid rgba(0,0,0,.22)",
       </div>
     )}
 
-    {loading && !building && (
-      <div
-        style={{
-          color: BRAND.accent,
-          padding: "10px 0",
-          fontWeight: 750,
-        }}
-      >
-        BOMBA AI is thinking...
-      </div>
-    )}
+    {loading &&
+      !building && (
+        <div
+          style={{
+            color:
+              BRAND.accent,
+            padding:
+              "10px 0",
+            fontWeight:
+              750,
+          }}
+        >
+          {mode ===
+          "flyer"
+            ? "🎨 Creating your square flyer..."
+            : mode ===
+              "logo"
+            ? "🪪 Creating your logo..."
+            : "BOMBA AI is thinking..."}
+        </div>
+      )}
 
-    {/* BUILD BUTTON */}
+    {/* APP BUILD BUTTON */}
     {showBuildButton && (
       <button
         type="button"
-        onClick={handleBuildApp}
+        onClick={
+          handleBuildApp
+        }
         style={{
-          width: "100%",
-          padding: "17px",
-          marginTop: "8px",
-          marginBottom: "20px",
-          borderRadius: "14px",
-          border: "none",
+          width:
+            "100%",
+          padding:
+            "17px",
+          marginTop:
+            "8px",
+          marginBottom:
+            "20px",
+          borderRadius:
+            "14px",
+          border:
+            "none",
           background:
             "linear-gradient(145deg,#FFE477,#FFD43B,#EBAF00)",
-          color: "#000",
-          fontSize: "17px",
-          fontWeight: 950,
-          cursor: "pointer",
+          color:
+            "#000",
+          fontSize:
+            "17px",
+          fontWeight:
+            950,
+          cursor:
+            "pointer",
           boxShadow:
             "0 12px 35px rgba(255,212,59,.16)",
         }}
@@ -916,193 +1488,202 @@ border: "1px solid rgba(0,0,0,.22)",
     )}
 
     {/* APP PREVIEW */}
-    {showPreview && generatedHtml && (
-      <section
-        style={{
-          marginTop: "20px",
-          background: "#0b0b0b",
-          border: "1px solid #FFD43B",
-          borderRadius: "17px",
-          padding: "12px",
-        }}
-      >
-        <h2
+    {showPreview &&
+      generatedHtml && (
+        <section
           style={{
-            margin: "5px 0 12px",
-            color: BRAND.accent,
+            marginTop:
+              "20px",
+            background:
+              "#0b0b0b",
+            border:
+              "1px solid #FFD43B",
+            borderRadius:
+              "17px",
+            padding:
+              "12px",
           }}
         >
-          📱 Live App Preview
-        </h2>
+          <h2
+            style={{
+              margin:
+                "5px 0 12px",
+              color:
+                BRAND.accent,
+            }}
+          >
+            📱 Live App Preview
+          </h2>
 
-        <div
-          style={{
-            display: "flex",
-            gap: "10px",
-            marginBottom: "12px",
-          }}
-        >
-          <button
-            type="button"
-            onClick={() =>
-              copyToClipboard(generatedHtml)
+          <div
+            style={{
+              display:
+                "flex",
+              gap:
+                "10px",
+              marginBottom:
+                "12px",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() =>
+                copyToClipboard(
+                  generatedHtml
+                )
+              }
+              style={{
+                flex: 1,
+                padding:
+                  "15px 8px",
+                borderRadius:
+                  "13px",
+                border:
+                  "none",
+                background:
+                  BRAND.accent,
+                color:
+                  "#000",
+                fontWeight:
+                  900,
+                cursor:
+                  "pointer",
+              }}
+            >
+              {copied
+                ? "✅ Copied!"
+                : "📋 Copy Full App"}
+            </button>
+
+            <button
+              type="button"
+              onClick={
+                handleDownloadApp
+              }
+              style={{
+                flex: 1,
+                padding:
+                  "15px 8px",
+                borderRadius:
+                  "13px",
+                border:
+                  "2px solid #FFD43B",
+                background:
+                  "#171717",
+                color:
+                  BRAND.accent,
+                fontWeight:
+                  900,
+                cursor:
+                  "pointer",
+              }}
+            >
+              ⬇️ Download HTML
+            </button>
+          </div>
+
+          <iframe
+            title="Generated App Preview"
+            srcDoc={
+              generatedHtml
             }
+            sandbox="allow-scripts allow-forms allow-modals"
             style={{
-              flex: 1,
-              padding: "15px 8px",
-              borderRadius: "13px",
-              border: "none",
-              background: BRAND.accent,
-              color: "#000",
-              fontWeight: 900,
-              cursor: "pointer",
+              width:
+                "100%",
+              height:
+                "700px",
+              border:
+                "1px solid #333",
+              borderRadius:
+                "12px",
+              background:
+                "#fff",
             }}
-          >
-            {copied
-              ? "✅ Copied!"
-              : "📋 Copy Full App"}
-          </button>
+          />
+        </section>
+      )}
 
-          <button
-            type="button"
-            onClick={handleDownloadApp}
-            style={{
-              flex: 1,
-              padding: "15px 8px",
-              borderRadius: "13px",
-              border: "2px solid #FFD43B",
-              background: "#171717",
-              color: BRAND.accent,
-              fontWeight: 900,
-              cursor: "pointer",
-            }}
-          >
-            ⬇️ Download HTML
-          </button>
-        </div>
-
-        <iframe
-          title="Generated App Preview"
-          srcDoc={generatedHtml}
-          sandbox="allow-scripts allow-forms allow-modals"
-          style={{
-            width: "100%",
-            height: "700px",
-            border: "1px solid #333",
-            borderRadius: "12px",
-            background: "#fff",
-          }}
-        />
-      </section>
-    )}
-
-    {/* LOGO PREVIEW */}
-    {showLogo && logoSvg && (
-      <section
-        style={{
-          marginTop: "20px",
-          padding: "16px",
-          borderRadius: "18px",
-          background:
-            "linear-gradient(145deg,#111,#080808)",
-          border: "1px solid #FFD43B",
-        }}
-      >
-        <h2
-          style={{
-            margin: "0 0 12px",
-            color: BRAND.accent,
-          }}
-        >
-          🪪 Your Generated Logo
-        </h2>
-
-        <div
-          style={{
-            minHeight: "260px",
-            borderRadius: "15px",
-            background: "#fff",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "20px",
-            overflow: "hidden",
-          }}
-          dangerouslySetInnerHTML={{
-            __html: logoSvg,
-          }}
-        />
-
-        <button
-          type="button"
-          onClick={downloadLogo}
-          style={{
-            width: "100%",
-            marginTop: "12px",
-            padding: "15px",
-            borderRadius: "13px",
-            border: "none",
-            background: BRAND.accent,
-            color: "#000",
-            fontWeight: 900,
-            cursor: "pointer",
-          }}
-        >
-          ⬇️ Download Logo
-        </button>
-      </section>
-    )}
-
-    <div ref={messagesEndRef} />
+    <div
+      ref={
+        messagesEndRef
+      }
+    />
   </section>
 
   {/* INPUT */}
   <form
-    onSubmit={handleSubmit}
+    onSubmit={
+      handleSubmit
+    }
     style={{
-      position: "fixed",
+      position:
+        "fixed",
       left: 0,
       right: 0,
       bottom: 0,
       zIndex: 100,
-      padding: "10px",
-      background: "rgba(5,5,5,.97)",
-      borderTop: "1px solid #222",
-      display: "flex",
-      gap: "8px",
-      backdropFilter: "blur(12px)",
+      padding:
+        "10px",
+      background:
+        "rgba(5,5,5,.97)",
+      borderTop:
+        "1px solid #222",
+      display:
+        "flex",
+      gap:
+        "8px",
+      backdropFilter:
+        "blur(12px)",
     }}
   >
     <textarea
       value={message}
       onChange={(event) =>
-        setMessage(event.target.value)
+        setMessage(
+          event.target.value
+        )
       }
       onKeyDown={(event) => {
         if (
-          event.key === "Enter" &&
+          event.key ===
+            "Enter" &&
           !event.shiftKey
         ) {
           event.preventDefault();
 
-          if (!loading && !building) {
+          if (
+            !loading &&
+            !building
+          ) {
             event.currentTarget.form?.requestSubmit();
           }
         }
       }}
-      placeholder={MODES[mode].placeholder}
+      placeholder={
+        MODES[mode]
+          .placeholder
+      }
       rows={1}
       style={{
         flex: 1,
         minWidth: 0,
-        padding: "13px",
-        borderRadius: "13px",
-        background: "#101010",
-        color: "#fff",
-        border: "1px solid #333",
-        outline: "none",
-        resize: "none",
-        fontSize: "15px",
+        padding:
+          "13px",
+        borderRadius:
+          "13px",
+        background:
+          "#101010",
+        color:
+          "#fff",
+        border:
+          "1px solid #333",
+        outline:
+          "none",
+        resize:
+          "none",
+        fontSize:
+          "15px",
       }}
     />
 
@@ -1114,17 +1695,22 @@ border: "1px solid rgba(0,0,0,.22)",
         !message.trim()
       }
       style={{
-        padding: "0 18px",
-        borderRadius: "13px",
+        padding:
+          "0 18px",
+        borderRadius:
+          "13px",
         background:
           loading ||
           building ||
           !message.trim()
             ? "#444"
             : BRAND.accent,
-        color: "#000",
-        fontWeight: 900,
-        border: "none",
+        color:
+          "#000",
+        fontWeight:
+          900,
+        border:
+          "none",
         cursor:
           loading ||
           building ||
