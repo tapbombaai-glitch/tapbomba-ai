@@ -98,16 +98,6 @@ VERY IMPORTANT:
 The generated application must be the user's requested application.
 
 Do NOT put BOMBA AI inside the generated application unless the user specifically requested it.
-
-Do NOT include:
-- BOMBA AI logo
-- BOMBA AI header
-- BOMBA AI chat
-- BOMBA AI controls
-- BOMBA AI messages
-- App Builder interface
-
-The generated HTML will be displayed separately as a live application preview.
 `,
   },
 };
@@ -129,13 +119,18 @@ export default function Home() {
   const [generatedHtml, setGeneratedHtml] = useState("");
   const [showPreview, setShowPreview] = useState(false);
   const [building, setBuilding] = useState(false);
+
   const [copied, setCopied] = useState(false);
   const [copiedMessageIndex, setCopiedMessageIndex] = useState(null);
 
-  // Picture upload state
+  // Image state
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState("");
   const fileInputRef = useRef(null);
+
+  // Generated flyer state
+  const [generatedFlyer, setGeneratedFlyer] = useState("");
+  const [flyerLoading, setFlyerLoading] = useState(false);
 
   const messagesEndRef = useRef(null);
 
@@ -143,7 +138,7 @@ export default function Home() {
     messagesEndRef.current?.scrollIntoView({
       behavior: "smooth",
     });
-  }, [messages, loading, showPreview]);
+  }, [messages, loading, showPreview, generatedFlyer]);
 
   function switchMode(newMode) {
     setMode(newMode);
@@ -162,6 +157,9 @@ export default function Home() {
     setCopied(false);
     setCopiedMessageIndex(null);
     setBuilding(false);
+
+    setGeneratedFlyer("");
+    removeSelectedImage();
   }
 
   function handleImageSelect(event) {
@@ -174,16 +172,18 @@ export default function Home() {
       return;
     }
 
-    // Keep uploads reasonable for a mobile-first application.
     if (file.size > 10 * 1024 * 1024) {
       alert("Please choose an image smaller than 10MB.");
       return;
     }
 
-    setSelectedImage(file);
+    if (imagePreview) {
+      URL.revokeObjectURL(imagePreview);
+    }
 
-    const previewUrl = URL.createObjectURL(file);
-    setImagePreview(previewUrl);
+    setSelectedImage(file);
+    setImagePreview(URL.createObjectURL(file));
+    setGeneratedFlyer("");
   }
 
   function removeSelectedImage() {
@@ -199,49 +199,116 @@ export default function Home() {
     }
   }
 
-  function extractHtmlFromReply(text) {
-    if (!text) return null;
+  function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
 
-    const fencedMatch = text.match(/```html\s*([\s\S]*?)```/i);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () =>
+        reject(new Error("Could not read the selected image."));
 
-    if (fencedMatch?.[1]) {
-      return fencedMatch[1].trim();
-    }
-
-    const genericFencedMatch = text.match(/```\s*([\s\S]*?)```/);
-
-    if (
-      genericFencedMatch?.[1] &&
-      /<(!doctype|html|head|body)/i.test(genericFencedMatch[1])
-    ) {
-      return genericFencedMatch[1].trim();
-    }
-
-    const htmlStart = text.search(/<!doctype html|<html[\s>]/i);
-
-    if (htmlStart >= 0) {
-      const possibleHtml = text.slice(htmlStart).trim();
-      const htmlEnd = possibleHtml.search(/<\/html>\s*$/i);
-
-      if (htmlEnd >= 0) {
-        return possibleHtml.slice(0, htmlEnd + 7).trim();
-      }
-    }
-
-    return null;
+      reader.readAsDataURL(file);
+    });
   }
 
-  function isPlanReply(text) {
-    if (!text) return false;
+  async function generateFlyer() {
+    if (!selectedImage || !message.trim() || flyerLoading) {
+      return;
+    }
 
-    const containsHtml =
-      /<!doctype html|<html[\s>]|```html/i.test(text);
+    setFlyerLoading(true);
+    setGeneratedFlyer("");
 
-    if (containsHtml) return false;
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "user",
+        content: `🎨 Generate Flyer\n\n${message.trim()}`,
+      },
+      {
+        role: "assistant",
+        content:
+          "🎨 Designing your professional square flyer...\n\nPlease wait while BOMBA AI creates the visual design.",
+      },
+    ]);
 
-    return /app name|purpose|main features|screens|navigation|user flow|data needed|design|ui|functional behavior|Ready to build\?/i.test(
-      text
-    );
+    try {
+      const imageData = await fileToDataUrl(selectedImage);
+
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: message.trim(),
+          imageData,
+          generateFlyer: true,
+        }),
+      });
+
+      let data;
+
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error(
+          "The flyer server returned an invalid response."
+        );
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error || "Flyer generation failed."
+        );
+      }
+
+      if (!data?.image) {
+        throw new Error(
+          "No flyer image was returned."
+        );
+      }
+
+      setGeneratedFlyer(data.image);
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content:
+            "✅ Your flyer is ready!\n\nThe real square promotional design is shown below.",
+        },
+      ]);
+
+      setMessage("");
+    } catch (error) {
+      console.error("Flyer generation error:", error);
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content:
+            `⚠️ Flyer generation failed.\n\n${
+              error?.message || "Please try again."
+            }`,
+        },
+      ]);
+    } finally {
+      setFlyerLoading(false);
+    }
+  }
+
+  function downloadFlyer() {
+    if (!generatedFlyer) return;
+
+    const link = document.createElement("a");
+    link.href = generatedFlyer;
+    link.download = "bomba-ai-flyer.png";
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   }
 
   async function callAI({ userContent, system }) {
@@ -261,11 +328,15 @@ export default function Home() {
     try {
       data = await response.json();
     } catch {
-      throw new Error("The AI server returned an invalid response.");
+      throw new Error(
+        "The AI server returned an invalid response."
+      );
     }
 
     if (!response.ok) {
-      throw new Error(data?.error || "The AI server returned an error.");
+      throw new Error(
+        data?.error || "The AI server returned an error."
+      );
     }
 
     return (
@@ -277,23 +348,84 @@ export default function Home() {
     );
   }
 
+  function extractHtmlFromReply(text) {
+    if (!text) return null;
+
+    const fencedMatch = text.match(
+      /```html\s*([\s\S]*?)```/i
+    );
+
+    if (fencedMatch?.[1]) {
+      return fencedMatch[1].trim();
+    }
+
+    const genericFencedMatch = text.match(
+      /```\s*([\s\S]*?)```/
+    );
+
+    if (
+      genericFencedMatch?.[1] &&
+      /<(!doctype|html|head|body)/i.test(
+        genericFencedMatch[1]
+      )
+    ) {
+      return genericFencedMatch[1].trim();
+    }
+
+    const htmlStart = text.search(
+      /<!doctype html|<html[\s>]/i
+    );
+
+    if (htmlStart >= 0) {
+      const possibleHtml = text.slice(htmlStart).trim();
+      const htmlEnd = possibleHtml.search(
+        /<\/html>\s*$/i
+      );
+
+      if (htmlEnd >= 0) {
+        return possibleHtml
+          .slice(0, htmlEnd + 7)
+          .trim();
+      }
+    }
+
+    return null;
+  }
+
+  function isPlanReply(text) {
+    if (!text) return false;
+
+    const containsHtml =
+      /<!doctype html|<html[\s>]|```html/i.test(text);
+
+    if (containsHtml) return false;
+
+    return /app name|purpose|main features|screens|navigation|user flow|data needed|design|ui|functional behavior|Ready to build\?/i.test(
+      text
+    );
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
 
     const trimmed = message.trim();
 
-    if (!trimmed || loading || building) return;
+    if (!trimmed || loading || building || flyerLoading) {
+      return;
+    }
 
-    const imageWasSelected = Boolean(selectedImage);
+    // If an image is selected in Content Creator,
+    // use the real flyer generator.
+    if (mode === "content" && selectedImage) {
+      await generateFlyer();
+      return;
+    }
 
     setMessages((prev) => [
       ...prev,
       {
         role: "user",
-        content:
-          imageWasSelected
-            ? `📷 Image attached\n\n${trimmed}`
-            : trimmed,
+        content: trimmed,
       },
     ]);
 
@@ -309,22 +441,6 @@ export default function Home() {
     }
 
     try {
-      /*
-       * The current /api/chat endpoint is text-based.
-       * We therefore keep the image attached in the interface and
-       * tell the server that an image was selected.
-       *
-       * Actual image understanding/editing will require the API route
-       * to be upgraded to accept image input.
-       */
-      const imageNotice = imageWasSelected
-        ? `
-
-IMPORTANT: The user also attached an image named "${selectedImage.name}".
-An image is attached in the BOMBA AI interface. Treat this as an image-based
-design request when image support is available.`
-        : "";
-
       const reply = await callAI({
         userContent:
           mode === "app"
@@ -337,8 +453,8 @@ Create ONLY the App Plan.
 DO NOT provide any source code or manual setup instructions.
 
 End exactly with:
-Ready to build? Click Build This App 🚀 below.${imageNotice}`
-            : `${trimmed}${imageNotice}`,
+Ready to build? Click Build This App 🚀 below.`
+            : trimmed,
         system: MODES[mode].system,
       });
 
@@ -396,12 +512,6 @@ Ready to build? Click Build This App 🚀 below.${imageNotice}`
       ]);
     } finally {
       setLoading(false);
-
-      /*
-       * Clear the image after the request is sent so the next request
-       * does not accidentally reuse the previous image.
-       */
-      removeSelectedImage();
     }
   }
 
@@ -469,8 +579,6 @@ Do NOT include:
 - App Builder controls
 - BOMBA AI branding
 
-The generated application will be shown separately in the Live App Preview.
-
 Return exactly one HTML code block.
 
 Start with:
@@ -527,7 +635,10 @@ End with:
     }
   }
 
-  async function copyToClipboard(text, messageIndex = null) {
+  async function copyToClipboard(
+    text,
+    messageIndex = null
+  ) {
     if (!text) return;
 
     try {
@@ -549,11 +660,15 @@ End with:
 
       return;
     } catch (error) {
-      console.warn("Modern clipboard failed:", error);
+      console.warn(
+        "Modern clipboard failed:",
+        error
+      );
     }
 
     try {
-      const textarea = document.createElement("textarea");
+      const textarea =
+        document.createElement("textarea");
 
       textarea.value = text;
       textarea.style.position = "fixed";
@@ -565,14 +680,20 @@ End with:
 
       textarea.focus();
       textarea.select();
-      textarea.setSelectionRange(0, textarea.value.length);
+      textarea.setSelectionRange(
+        0,
+        textarea.value.length
+      );
 
-      const successful = document.execCommand("copy");
+      const successful =
+        document.execCommand("copy");
 
       document.body.removeChild(textarea);
 
       if (!successful) {
-        throw new Error("Fallback copy failed.");
+        throw new Error(
+          "Fallback copy failed."
+        );
       }
 
       if (messageIndex !== null) {
@@ -600,9 +721,12 @@ End with:
   function handleDownloadApp() {
     if (!generatedHtml) return;
 
-    const blob = new Blob([generatedHtml], {
-      type: "text/html;charset=utf-8",
-    });
+    const blob = new Blob(
+      [generatedHtml],
+      {
+        type: "text/html;charset=utf-8",
+      }
+    );
 
     const url = URL.createObjectURL(blob);
 
@@ -618,7 +742,8 @@ End with:
     URL.revokeObjectURL(url);
   }
 
-  const lastMessage = messages[messages.length - 1];
+  const lastMessage =
+    messages[messages.length - 1];
 
   const showBuildButton =
     mode === "app" &&
@@ -694,50 +819,58 @@ End with:
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+            gridTemplateColumns:
+              "repeat(2, minmax(0, 1fr))",
             gap: "10px",
             marginBottom: "20px",
           }}
         >
-          {Object.entries(MODES).map(([key, item]) => (
-            <button
-              key={key}
-              onClick={() => switchMode(key)}
-              type="button"
-              style={{
-                padding: "15px 10px",
-                borderRadius: "14px",
-                border:
-                  mode === key
-                    ? "2px solid #FFD43B"
-                    : "1px solid #333",
-                background:
-                  mode === key ? BRAND.accent : "#111",
-                color:
-                  mode === key ? "#000" : "#fff",
-                fontWeight: 800,
-                cursor: "pointer",
-              }}
-            >
-              <div>
-                {item.icon} {item.name}
-              </div>
-
-              <small
+          {Object.entries(MODES).map(
+            ([key, item]) => (
+              <button
+                key={key}
+                onClick={() =>
+                  switchMode(key)
+                }
+                type="button"
                 style={{
-                  display: "block",
-                  marginTop: "5px",
-                  opacity: 0.7,
-                  fontWeight: 500,
+                  padding: "15px 10px",
+                  borderRadius: "14px",
+                  border:
+                    mode === key
+                      ? "2px solid #FFD43B"
+                      : "1px solid #333",
+                  background:
+                    mode === key
+                      ? BRAND.accent
+                      : "#111",
+                  color:
+                    mode === key
+                      ? "#000"
+                      : "#fff",
+                  fontWeight: 800,
+                  cursor: "pointer",
                 }}
               >
-                {item.description}
-              </small>
-            </button>
-          ))}
+                <div>
+                  {item.icon} {item.name}
+                </div>
+
+                <small
+                  style={{
+                    display: "block",
+                    marginTop: "5px",
+                    opacity: 0.7,
+                    fontWeight: 500,
+                  }}
+                >
+                  {item.description}
+                </small>
+              </button>
+            )
+          )}
         </div>
 
-        {/* IMAGE UPLOAD AREA */}
         {mode === "content" && (
           <section
             style={{
@@ -752,7 +885,8 @@ End with:
               style={{
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "space-between",
+                justifyContent:
+                  "space-between",
                 gap: "10px",
                 marginBottom: "10px",
               }}
@@ -774,7 +908,8 @@ End with:
                     marginTop: "3px",
                   }}
                 >
-                  Add a product or personal image for your design request.
+                  Add a product picture to create
+                  a real promotional flyer.
                 </div>
               </div>
 
@@ -782,26 +917,42 @@ End with:
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
-                onChange={handleImageSelect}
-                style={{ display: "none" }}
+                onChange={
+                  handleImageSelect
+                }
+                style={{
+                  display: "none",
+                }}
               />
 
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={loading || building}
+                onClick={() =>
+                  fileInputRef.current?.click()
+                }
+                disabled={
+                  loading ||
+                  building ||
+                  flyerLoading
+                }
                 style={{
-                  padding: "11px 14px",
+                  padding:
+                    "11px 14px",
                   borderRadius: "11px",
-                  border: "1px solid #FFD43B",
+                  border:
+                    "1px solid #FFD43B",
                   background: "#181818",
-                  color: BRAND.accent,
+                  color:
+                    BRAND.accent,
                   fontWeight: 900,
                   cursor:
-                    loading || building
+                    loading ||
+                    building ||
+                    flyerLoading
                       ? "not-allowed"
                       : "pointer",
-                  whiteSpace: "nowrap",
+                  whiteSpace:
+                    "nowrap",
                 }}
               >
                 ＋ Choose
@@ -811,40 +962,57 @@ End with:
             {imagePreview && (
               <div
                 style={{
-                  position: "relative",
+                  position:
+                    "relative",
                   marginTop: "12px",
-                  borderRadius: "14px",
-                  overflow: "hidden",
-                  border: "1px solid #333",
-                  background: "#000",
+                  borderRadius:
+                    "14px",
+                  overflow:
+                    "hidden",
+                  border:
+                    "1px solid #333",
+                  background:
+                    "#000",
                 }}
               >
                 <img
                   src={imagePreview}
-                  alt="Selected image preview"
+                  alt="Selected product"
                   style={{
                     width: "100%",
-                    maxHeight: "360px",
-                    objectFit: "contain",
-                    display: "block",
-                    background: "#000",
+                    maxHeight:
+                      "360px",
+                    objectFit:
+                      "contain",
+                    display:
+                      "block",
+                    background:
+                      "#000",
                   }}
                 />
 
                 <button
                   type="button"
-                  onClick={removeSelectedImage}
+                  onClick={
+                    removeSelectedImage
+                  }
                   style={{
-                    position: "absolute",
+                    position:
+                      "absolute",
                     top: "10px",
                     right: "10px",
-                    padding: "8px 11px",
-                    borderRadius: "10px",
-                    border: "1px solid #555",
-                    background: "#000",
+                    padding:
+                      "8px 11px",
+                    borderRadius:
+                      "10px",
+                    border:
+                      "1px solid #555",
+                    background:
+                      "#000",
                     color: "#fff",
                     fontWeight: 800,
-                    cursor: "pointer",
+                    cursor:
+                      "pointer",
                   }}
                 >
                   ✕ Remove
@@ -863,83 +1031,242 @@ End with:
                 📎 {selectedImage.name}
               </div>
             )}
+
+            {selectedImage && (
+              <div
+                style={{
+                  marginTop: "12px",
+                  padding: "11px",
+                  borderRadius: "12px",
+                  background: "#141414",
+                  border: "1px solid #292929",
+                  color: "#aaa",
+                  fontSize: "13px",
+                  lineHeight: 1.5,
+                }}
+              >
+                💡 <strong>How to use it:</strong>
+                <br />
+                Type what you want on the
+                flyer below, for example:
+                <br />
+                <span
+                  style={{
+                    color: "#fff",
+                  }}
+                >
+                  "Create a professional shoe
+                  sale flyer. Price ₦25,000.
+                  Add WhatsApp ordering."
+                </span>
+              </div>
+            )}
           </section>
         )}
 
         <div>
-          {messages.map((msg, index) => (
-            <div
-              key={index}
-              style={{
-                marginBottom: "16px",
-                textAlign:
-                  msg.role === "user" ? "right" : "left",
-              }}
-            >
+          {messages.map(
+            (msg, index) => (
               <div
+                key={index}
                 style={{
-                  display: "inline-block",
-                  maxWidth: "92%",
-                  padding: "13px 15px",
-                  borderRadius: "15px",
-                  background:
-                    msg.role === "user" ? "#222" : "#111",
-                  border:
-                    msg.role === "user"
-                      ? "1px solid #333"
-                      : "1px solid #252525",
-                  whiteSpace: "pre-wrap",
-                  lineHeight: 1.55,
-                  textAlign: "left",
+                  marginBottom:
+                    "16px",
+                  textAlign:
+                    msg.role ===
+                    "user"
+                      ? "right"
+                      : "left",
                 }}
               >
-                {msg.content}
+                <div
+                  style={{
+                    display:
+                      "inline-block",
+                    maxWidth:
+                      "92%",
+                    padding:
+                      "13px 15px",
+                    borderRadius:
+                      "15px",
+                    background:
+                      msg.role ===
+                      "user"
+                        ? "#222"
+                        : "#111",
+                    border:
+                      msg.role ===
+                      "user"
+                        ? "1px solid #333"
+                        : "1px solid #252525",
+                    whiteSpace:
+                      "pre-wrap",
+                    lineHeight: 1.55,
+                    textAlign:
+                      "left",
+                  }}
+                >
+                  {msg.content}
 
-                {msg.role === "assistant" &&
-                  !msg.content.includes(
-                    "Building your app automatically"
-                  ) &&
-                  !msg.content.includes(
-                    "Your app has been built automatically"
-                  ) && (
-                    <div style={{ marginTop: "10px" }}>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          copyToClipboard(msg.content, index)
-                        }
+                  {msg.role ===
+                    "assistant" &&
+                    !msg.content.includes(
+                      "Building your app automatically"
+                    ) &&
+                    !msg.content.includes(
+                      "Your app has been built automatically"
+                    ) &&
+                    !msg.content.includes(
+                      "Designing your professional square flyer"
+                    ) && (
+                      <div
                         style={{
-                          padding: "8px 12px",
-                          borderRadius: "9px",
-                          border: "1px solid #333",
-                          background: "#222",
-                          color: "#fff",
-                          fontSize: "13px",
-                          fontWeight: 700,
-                          cursor: "pointer",
+                          marginTop:
+                            "10px",
                         }}
                       >
-                        {copiedMessageIndex === index
-                          ? "✅ Copied!"
-                          : "📋 Copy Answer"}
-                      </button>
-                    </div>
-                  )}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            copyToClipboard(
+                              msg.content,
+                              index
+                            )
+                          }
+                          style={{
+                            padding:
+                              "8px 12px",
+                            borderRadius:
+                              "9px",
+                            border:
+                              "1px solid #333",
+                            background:
+                              "#222",
+                            color:
+                              "#fff",
+                            fontSize:
+                              "13px",
+                            fontWeight:
+                              700,
+                            cursor:
+                              "pointer",
+                          }}
+                        >
+                          {copiedMessageIndex ===
+                          index
+                            ? "✅ Copied!"
+                            : "📋 Copy Answer"}
+                        </button>
+                      </div>
+                    )}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          )}
         </div>
 
-        {loading && !building && (
+        {loading &&
+          !building &&
+          !flyerLoading && (
+            <div
+              style={{
+                color:
+                  BRAND.accent,
+                padding:
+                  "10px 0",
+                fontWeight: 700,
+              }}
+            >
+              BOMBA AI is thinking...
+            </div>
+          )}
+
+        {flyerLoading && (
           <div
             style={{
-              color: BRAND.accent,
-              padding: "10px 0",
-              fontWeight: 700,
+              color:
+                BRAND.accent,
+              padding:
+                "12px 0",
+              fontWeight: 800,
             }}
           >
-            BOMBA AI is thinking...
+            🎨 Creating your real
+            1024×1024 flyer...
           </div>
+        )}
+
+        {generatedFlyer && (
+          <section
+            style={{
+              marginTop:
+                "22px",
+              padding:
+                "12px",
+              borderRadius:
+                "16px",
+              border:
+                "1px solid #FFD43B",
+              background:
+                "#111",
+            }}
+          >
+            <h2
+              style={{
+                margin:
+                  "5px 0 12px",
+                color:
+                  BRAND.accent,
+                fontSize:
+                  "20px",
+              }}
+            >
+              🎨 Your Flyer
+            </h2>
+
+            <img
+              src={generatedFlyer}
+              alt="Generated BOMBA AI flyer"
+              style={{
+                width: "100%",
+                aspectRatio:
+                  "1 / 1",
+                objectFit:
+                  "cover",
+                display:
+                  "block",
+                borderRadius:
+                  "12px",
+                background:
+                  "#fff",
+              }}
+            />
+
+            <button
+              type="button"
+              onClick={downloadFlyer}
+              style={{
+                width: "100%",
+                marginTop:
+                  "12px",
+                padding:
+                  "16px",
+                borderRadius:
+                  "13px",
+                border: "none",
+                background:
+                  BRAND.accent,
+                color: "#000",
+                fontWeight: 900,
+                fontSize:
+                  "16px",
+                cursor:
+                  "pointer",
+              }}
+            >
+              ⬇️ Save Flyer
+            </button>
+          </section>
         )}
 
         {showBuildButton && (
@@ -951,16 +1278,21 @@ End with:
               width: "100%",
               padding: "17px",
               marginTop: "10px",
-              marginBottom: "20px",
-              borderRadius: "14px",
+              marginBottom:
+                "20px",
+              borderRadius:
+                "14px",
               border: "none",
-              background: BRAND.accent,
+              background:
+                BRAND.accent,
               color: "#000",
-              fontSize: "17px",
+              fontSize:
+                "17px",
               fontWeight: 900,
-              cursor: building
-                ? "not-allowed"
-                : "pointer",
+              cursor:
+                building
+                  ? "not-allowed"
+                  : "pointer",
             }}
           >
             {building
@@ -969,167 +1301,81 @@ End with:
           </button>
         )}
 
-        {showPreview && generatedHtml && (
-          <section
-            style={{
-              marginTop: "20px",
-              background: "#111",
-              border: "1px solid #FFD43B",
-              borderRadius: "16px",
-              padding: "12px",
-            }}
-          >
-            <h2
+        {showPreview &&
+          generatedHtml && (
+            <section
               style={{
-                margin: "5px 0 12px",
-                color: BRAND.accent,
+                marginTop:
+                  "20px",
+                background:
+                  "#111",
+                border:
+                  "1px solid #FFD43B",
+                borderRadius:
+                  "16px",
+                padding:
+                  "12px",
               }}
             >
-              📱 Live App Preview
-            </h2>
-
-            <div
-              style={{
-                display: "flex",
-                gap: "10px",
-                marginBottom: "12px",
-              }}
-            >
-              <button
-                onClick={handleCopyFullApp}
-                type="button"
+              <h2
                 style={{
-                  flex: 1,
-                  padding: "16px 8px",
-                  borderRadius: "13px",
-                  border: "none",
-                  background: BRAND.accent,
-                  color: "#000",
-                  fontSize: "15px",
-                  fontWeight: 900,
-                  cursor: "pointer",
+                  margin:
+                    "5px 0 12px",
+                  color:
+                    BRAND.accent,
                 }}
               >
-                {copied
-                  ? "✅ Copied!"
-                  : "📋 Copy Full App"}
-              </button>
+                📱 Live App Preview
+              </h2>
 
-              <button
-                onClick={handleDownloadApp}
-                type="button"
+              <div
                 style={{
-                  flex: 1,
-                  padding: "16px 8px",
-                  borderRadius: "13px",
-                  border: "2px solid #FFD43B",
-                  background: "#222",
-                  color: BRAND.accent,
-                  fontSize: "15px",
-                  fontWeight: 900,
-                  cursor: "pointer",
+                  display:
+                    "flex",
+                  gap: "10px",
+                  marginBottom:
+                    "12px",
                 }}
               >
-                ⬇️ Download HTML
-              </button>
-            </div>
+                <button
+                  onClick={
+                    handleCopyFullApp
+                  }
+                  type="button"
+                  style={{
+                    flex: 1,
+                    padding:
+                      "16px 8px",
+                    borderRadius:
+                      "13px",
+                    border:
+                      "none",
+                    background:
+                      BRAND.accent,
+                    color: "#000",
+                    fontSize:
+                      "15px",
+                    fontWeight:
+                      900,
+                    cursor:
+                      "pointer",
+                  }}
+                >
+                  {copied
+                    ? "✅ Copied!"
+                    : "📋 Copy Full App"}
+                </button>
 
-            <iframe
-              title="Generated App Preview"
-              srcDoc={generatedHtml}
-              sandbox="allow-scripts allow-forms allow-modals"
-              style={{
-                width: "100%",
-                height: "700px",
-                border: "1px solid #333",
-                borderRadius: "12px",
-                background: "#fff",
-              }}
-            />
-          </section>
-        )}
-
-        <div ref={messagesEndRef} />
-      </section>
-
-      <form
-        onSubmit={handleSubmit}
-        style={{
-          position: "fixed",
-          left: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 100,
-          padding: "10px",
-          background: "#050505",
-          borderTop: "1px solid #222",
-          display: "flex",
-          gap: "8px",
-        }}
-      >
-        <textarea
-          value={message}
-          onChange={(event) =>
-            setMessage(event.target.value)
-          }
-          onKeyDown={(event) => {
-            if (
-              event.key === "Enter" &&
-              !event.shiftKey
-            ) {
-              event.preventDefault();
-
-              if (!loading && !building) {
-                event.currentTarget.form?.requestSubmit();
-              }
-            }
-          }}
-          placeholder={MODES[mode].placeholder}
-          rows={1}
-          style={{
-            flex: 1,
-            minWidth: 0,
-            padding: "13px",
-            borderRadius: "13px",
-            background: "#111",
-            color: "#fff",
-            border: "1px solid #333",
-            outline: "none",
-            resize: "none",
-            fontSize: "15px",
-          }}
-        />
-
-        <button
-          type="submit"
-          disabled={
-            loading ||
-            building ||
-            !message.trim()
-          }
-          style={{
-            padding: "0 18px",
-            borderRadius: "13px",
-            background:
-              loading ||
-              building ||
-              !message.trim()
-                ? "#555"
-                : BRAND.accent,
-            color: "#000",
-            fontWeight: 900,
-            border: "none",
-            cursor:
-              loading ||
-              building ||
-              !message.trim()
-                ? "not-allowed"
-                : "pointer",
-          }}
-        >
-          Send
-        </button>
-      </form>
-    </main>
-  );
-}
+                <button
+                  onClick={
+                    handleDownloadApp
+                  }
+                  type="button"
+                  style={{
+                    flex: 1,
+                    padding:
+                      "16px 8px",
+                    borderRadius:
+                      "13px",
+                    border:
+                      "2
