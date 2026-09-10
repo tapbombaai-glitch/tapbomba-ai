@@ -28,48 +28,39 @@ const MODES = {
     welcome:
       '🚀 BOMBA AI App Builder ON\n\nDescribe ANY app you want in normal language. I will create an App Plan first. Then you can click "Build This App 🚀" to generate the app.',
     system:
-      `You are BOMBA AI Universal App Builder.
-
-IMPORTANT APP BUILDER RULES:
-
-1. The user's latest request is the current app request.
-2. Do not unnecessarily reuse unrelated older app requests.
-3. First create an APP PLAN. Do not generate the actual application code yet.
-4. The App Plan must clearly include:
-   - App name
-   - Purpose
-   - Main features
-   - Screens/pages
-   - Navigation
-   - User flow
-   - Data needed
-   - Design/UI
-   - Functional behavior
-5. End every new App Plan with exactly:
-Ready to build? Click Build This App 🚀 below.
-6. Only generate application code when the user clicks Build This App 🚀.
-7. When building, create a complete functional mobile-friendly application.
-8. Return the complete application inside one ```html code block.
-9. The HTML must contain its CSS and JavaScript so it can work as a standalone HTML file.
-10. Do not say the app is built if you did not provide the complete HTML.
-11. Make buttons and important interactions functional.
-12. Keep the generated application focused on the user's latest app request.
-13. Do not add unrelated features from previous requests.`,
+      "You are BOMBA AI Universal App Builder.\n\n" +
+      "IMPORTANT APP BUILDER RULES:\n\n" +
+      "1. The user's latest request is the current app request.\n" +
+      "2. Do not unnecessarily reuse unrelated older app requests.\n" +
+      "3. First create an APP PLAN. Do not generate the actual application code yet.\n" +
+      "4. The App Plan must clearly include:\n" +
+      "   - App name\n" +
+      "   - Purpose\n" +
+      "   - Main features\n" +
+      "   - Screens/pages\n" +
+      "   - Navigation\n" +
+      "   - User flow\n" +
+      "   - Data needed\n" +
+      "   - Design/UI\n" +
+      "   - Functional behavior\n" +
+      "5. End every new App Plan with exactly:\n" +
+      'Ready to build? Click Build This App 🚀 below.\n' +
+      "6. Only generate application code when the user clicks Build This App 🚀.\n" +
+      "7. When building, create a complete functional mobile-friendly application.\n" +
+      "8. Return the complete application inside one HTML code block.\n" +
+      "9. The HTML must contain its CSS and JavaScript so it can work as a standalone HTML file.\n" +
+      "10. Do not say the app is built if you did not provide the complete HTML.\n" +
+      "11. Make buttons and important interactions functional.\n" +
+      "12. Keep the generated application focused on the user's latest app request.\n" +
+      "13. Do not add unrelated features from previous requests.",
   },
 };
 
-type ModeKey = keyof typeof MODES;
-
-type Message = {
-  role: "user" | "assistant";
-  content: string;
-};
-
 export default function Home() {
-  const [mode, setMode] = useState<ModeKey>("content");
+  const [mode, setMode] = useState("content");
   const [message, setMessage] = useState("");
 
-  const [messages, setMessages] = useState<Message[]>([
+  const [messages, setMessages] = useState([
     {
       role: "assistant",
       content:
@@ -84,7 +75,7 @@ export default function Home() {
   const [building, setBuilding] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const messagesEndRef = useRef(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({
@@ -92,7 +83,7 @@ export default function Home() {
     });
   }, [messages, loading, showPreview]);
 
-  function switchMode(newMode: ModeKey) {
+  function switchMode(newMode) {
     setMode(newMode);
 
     setMessages([
@@ -111,7 +102,7 @@ export default function Home() {
     setLoading(false);
   }
 
-  function extractHtmlFromReply(text: string): string | null {
+  function extractHtmlFromReply(text) {
     if (!text) {
       return null;
     }
@@ -120,7 +111,7 @@ export default function Home() {
       /```html\s*([\s\S]*?)```/i
     );
 
-    if (fencedMatch?.[1]) {
+    if (fencedMatch && fencedMatch[1]) {
       return fencedMatch[1].trim();
     }
 
@@ -129,7 +120,8 @@ export default function Home() {
     );
 
     if (
-      genericFencedMatch?.[1] &&
+      genericFencedMatch &&
+      genericFencedMatch[1] &&
       /<(!doctype|html|head|body)/i.test(
         genericFencedMatch[1]
       )
@@ -160,7 +152,7 @@ export default function Home() {
     return null;
   }
 
-  function isPlanReply(text: string): boolean {
+  function isPlanReply(text) {
     if (!text) {
       return false;
     }
@@ -184,13 +176,7 @@ export default function Home() {
     );
   }
 
-  async function callAI({
-    userContent,
-    system,
-  }: {
-    userContent: string;
-    system: string;
-  }) {
+  async function callAI({ userContent, system }) {
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: {
@@ -202,7 +188,7 @@ export default function Home() {
       }),
     });
 
-    let data: any;
+    let data;
 
     try {
       data = await response.json();
@@ -228,9 +214,7 @@ export default function Home() {
     );
   }
 
-  async function handleSubmit(
-    event: React.FormEvent<HTMLFormElement>
-  ) {
+  async function handleSubmit(event) {
     event.preventDefault();
 
     const trimmed = message.trim();
@@ -239,13 +223,7 @@ export default function Home() {
       return;
     }
 
-    /*
-     * IMPORTANT:
-     * For every new request we send ONLY the latest request
-     * to the API. This prevents old unrelated app requests
-     * from being carried into a new task.
-     */
-    const userMessage: Message = {
+    const userMessage = {
       role: "user",
       content: trimmed,
     };
@@ -258,10 +236,6 @@ export default function Home() {
     setMessage("");
     setLoading(true);
 
-    /*
-     * Starting a fresh App Builder request must also clear
-     * the previous generated app and previous plan.
-     */
     if (mode === "app") {
       setAppPlan("");
       setGeneratedHtml("");
@@ -278,10 +252,6 @@ export default function Home() {
       if (mode === "app") {
         const html = extractHtmlFromReply(reply);
 
-        /*
-         * A normal App Builder request should produce a plan,
-         * not an application immediately.
-         */
         if (html) {
           setGeneratedHtml(html);
           setShowPreview(true);
@@ -336,37 +306,35 @@ export default function Home() {
       {
         role: "assistant",
         content:
-          "🔨 Building your app step by step...\n\n1️⃣ Reading the App Plan\n2️⃣ Creating the interface\n3️⃣ Adding the app functionality\n4️⃣ Preparing the live preview\n\nPlease wait...",
+          "🔨 Building your app step by step...\n\n" +
+          "1️⃣ Reading the App Plan\n" +
+          "2️⃣ Creating the interface\n" +
+          "3️⃣ Adding the app functionality\n" +
+          "4️⃣ Preparing the live preview\n\n" +
+          "Please wait...",
       },
     ]);
 
-    /*
-     * IMPORTANT:
-     * The build request contains the plan only.
-     * It does NOT include the old chat history.
-     */
-    const buildPrompt = `BUILD THE APPLICATION NOW.
-
-Use ONLY this App Plan as the specification for the application.
-
-APP PLAN:
-${appPlan}
-
-BUILD REQUIREMENTS:
-
-- Create a complete functional application.
-- Make it mobile-friendly.
-- Make the UI professional.
-- Include the requested screens and features.
-- Make buttons and interactions functional where possible.
-- Keep everything self-contained.
-- Put CSS inside the HTML.
-- Put JavaScript inside the HTML.
-- Do not use a separate CSS or JS file.
-- Return ONLY the complete application inside one html code block.
-- Start with <!DOCTYPE html>.
-- End with </html>.
-- Do not return an explanation outside the code block.`;
+    const buildPrompt =
+      "BUILD THE APPLICATION NOW.\n\n" +
+      "Use ONLY this App Plan as the specification for the application.\n\n" +
+      "APP PLAN:\n" +
+      appPlan +
+      "\n\n" +
+      "BUILD REQUIREMENTS:\n\n" +
+      "- Create a complete functional application.\n" +
+      "- Make it mobile-friendly.\n" +
+      "- Make the UI professional.\n" +
+      "- Include the requested screens and features.\n" +
+      "- Make buttons and interactions functional where possible.\n" +
+      "- Keep everything self-contained.\n" +
+      "- Put CSS inside the HTML.\n" +
+      "- Put JavaScript inside the HTML.\n" +
+      "- Do not use a separate CSS or JS file.\n" +
+      "- Return ONLY the complete application inside one HTML code block.\n" +
+      "- Start with <!DOCTYPE html>.\n" +
+      "- End with </html>.\n" +
+      "- Do not return an explanation outside the code block.";
 
     try {
       const reply = await callAI({
@@ -433,10 +401,6 @@ BUILD REQUIREMENTS:
     } catch (error) {
       console.error("Copy error:", error);
 
-      /*
-       * Fallback for some mobile browsers where the
-       * Clipboard API may not be available.
-       */
       try {
         const textarea =
           document.createElement("textarea");
@@ -554,51 +518,48 @@ BUILD REQUIREMENTS:
             marginBottom: "20px",
           }}
         >
-          {(
-            Object.entries(MODES) as [
-              ModeKey,
-              (typeof MODES)[ModeKey]
-            ][]
-          ).map(([key, item]) => (
-            <button
-              key={key}
-              onClick={() => switchMode(key)}
-              type="button"
-              style={{
-                padding: "15px 10px",
-                borderRadius: "14px",
-                border:
-                  mode === key
-                    ? "2px solid #FFD43B"
-                    : "1px solid #333",
-                background:
-                  mode === key
-                    ? BRAND.accent
-                    : "#111",
-                color:
-                  mode === key
-                    ? "#000"
-                    : "#fff",
-                fontWeight: 800,
-                cursor: "pointer",
-              }}
-            >
-              <div>
-                {item.icon} {item.name}
-              </div>
-
-              <small
+          {Object.entries(MODES).map(
+            ([key, item]) => (
+              <button
+                key={key}
+                onClick={() => switchMode(key)}
+                type="button"
                 style={{
-                  display: "block",
-                  marginTop: "5px",
-                  opacity: 0.7,
-                  fontWeight: 500,
+                  padding: "15px 10px",
+                  borderRadius: "14px",
+                  border:
+                    mode === key
+                      ? "2px solid #FFD43B"
+                      : "1px solid #333",
+                  background:
+                    mode === key
+                      ? BRAND.accent
+                      : "#111",
+                  color:
+                    mode === key
+                      ? "#000"
+                      : "#fff",
+                  fontWeight: 800,
+                  cursor: "pointer",
                 }}
               >
-                {item.description}
-              </small>
-            </button>
-          ))}
+                <div>
+                  {item.icon} {item.name}
+                </div>
+
+                <small
+                  style={{
+                    display: "block",
+                    marginTop: "5px",
+                    opacity: 0.7,
+                    fontWeight: 500,
+                  }}
+                >
+                  {item.description}
+                </small>
+              </button>
+            )
+          )}
         </div>
 
         <div>
