@@ -132,6 +132,11 @@ export default function Home() {
   const [copied, setCopied] = useState(false);
   const [copiedMessageIndex, setCopiedMessageIndex] = useState(null);
 
+  // Picture upload state
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState("");
+  const fileInputRef = useRef(null);
+
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -157,7 +162,41 @@ export default function Home() {
     setCopied(false);
     setCopiedMessageIndex(null);
     setBuilding(false);
-    setLoading(false);
+  }
+
+  function handleImageSelect(event) {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      alert("Please select an image file.");
+      return;
+    }
+
+    // Keep uploads reasonable for a mobile-first application.
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Please choose an image smaller than 10MB.");
+      return;
+    }
+
+    setSelectedImage(file);
+
+    const previewUrl = URL.createObjectURL(file);
+    setImagePreview(previewUrl);
+  }
+
+  function removeSelectedImage() {
+    if (imagePreview) {
+      URL.revokeObjectURL(imagePreview);
+    }
+
+    setSelectedImage(null);
+    setImagePreview("");
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   }
 
   function extractHtmlFromReply(text) {
@@ -245,11 +284,16 @@ export default function Home() {
 
     if (!trimmed || loading || building) return;
 
+    const imageWasSelected = Boolean(selectedImage);
+
     setMessages((prev) => [
       ...prev,
       {
         role: "user",
-        content: trimmed,
+        content:
+          imageWasSelected
+            ? `📷 Image attached\n\n${trimmed}`
+            : trimmed,
       },
     ]);
 
@@ -265,6 +309,22 @@ export default function Home() {
     }
 
     try {
+      /*
+       * The current /api/chat endpoint is text-based.
+       * We therefore keep the image attached in the interface and
+       * tell the server that an image was selected.
+       *
+       * Actual image understanding/editing will require the API route
+       * to be upgraded to accept image input.
+       */
+      const imageNotice = imageWasSelected
+        ? `
+
+IMPORTANT: The user also attached an image named "${selectedImage.name}".
+An image is attached in the BOMBA AI interface. Treat this as an image-based
+design request when image support is available.`
+        : "";
+
       const reply = await callAI({
         userContent:
           mode === "app"
@@ -277,8 +337,8 @@ Create ONLY the App Plan.
 DO NOT provide any source code or manual setup instructions.
 
 End exactly with:
-Ready to build? Click Build This App 🚀 below.`
-            : trimmed,
+Ready to build? Click Build This App 🚀 below.${imageNotice}`
+            : `${trimmed}${imageNotice}`,
         system: MODES[mode].system,
       });
 
@@ -336,6 +396,12 @@ Ready to build? Click Build This App 🚀 below.`
       ]);
     } finally {
       setLoading(false);
+
+      /*
+       * Clear the image after the request is sent so the next request
+       * does not accidentally reuse the previous image.
+       */
+      removeSelectedImage();
     }
   }
 
@@ -569,7 +635,7 @@ End with:
         color: "#fff",
         fontFamily:
           "system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
-        paddingBottom: "110px",
+        paddingBottom: "120px",
       }}
     >
       <header
@@ -670,6 +736,135 @@ End with:
             </button>
           ))}
         </div>
+
+        {/* IMAGE UPLOAD AREA */}
+        {mode === "content" && (
+          <section
+            style={{
+              marginBottom: "18px",
+              padding: "14px",
+              borderRadius: "16px",
+              border: "1px solid #292929",
+              background: "#0b0b0b",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "10px",
+                marginBottom: "10px",
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    fontWeight: 900,
+                    fontSize: "16px",
+                  }}
+                >
+                  🖼️ Add a Picture
+                </div>
+
+                <div
+                  style={{
+                    color: "#999",
+                    fontSize: "13px",
+                    marginTop: "3px",
+                  }}
+                >
+                  Add a product or personal image for your design request.
+                </div>
+              </div>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageSelect}
+                style={{ display: "none" }}
+              />
+
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={loading || building}
+                style={{
+                  padding: "11px 14px",
+                  borderRadius: "11px",
+                  border: "1px solid #FFD43B",
+                  background: "#181818",
+                  color: BRAND.accent,
+                  fontWeight: 900,
+                  cursor:
+                    loading || building
+                      ? "not-allowed"
+                      : "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                ＋ Choose
+              </button>
+            </div>
+
+            {imagePreview && (
+              <div
+                style={{
+                  position: "relative",
+                  marginTop: "12px",
+                  borderRadius: "14px",
+                  overflow: "hidden",
+                  border: "1px solid #333",
+                  background: "#000",
+                }}
+              >
+                <img
+                  src={imagePreview}
+                  alt="Selected image preview"
+                  style={{
+                    width: "100%",
+                    maxHeight: "360px",
+                    objectFit: "contain",
+                    display: "block",
+                    background: "#000",
+                  }}
+                />
+
+                <button
+                  type="button"
+                  onClick={removeSelectedImage}
+                  style={{
+                    position: "absolute",
+                    top: "10px",
+                    right: "10px",
+                    padding: "8px 11px",
+                    borderRadius: "10px",
+                    border: "1px solid #555",
+                    background: "#000",
+                    color: "#fff",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                  }}
+                >
+                  ✕ Remove
+                </button>
+              </div>
+            )}
+
+            {selectedImage && (
+              <div
+                style={{
+                  marginTop: "9px",
+                  color: "#bbb",
+                  fontSize: "12px",
+                }}
+              >
+                📎 {selectedImage.name}
+              </div>
+            )}
+          </section>
+        )}
 
         <div>
           {messages.map((msg, index) => (
