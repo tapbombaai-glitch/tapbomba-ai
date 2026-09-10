@@ -1,0 +1,93 @@
+async function handleBuildApp() {
+    if (!appPlan || building) return;
+
+    setBuilding(true);
+    setLoading(true);
+    setShowPreview(false);
+    setGeneratedHtml("");
+
+    // Step 1
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: "Build This App 🚀" },
+      {
+        role: "assistant",
+        content: "🔨 Building your app...\n\n1️⃣ Reading your App Plan...",
+      },
+    ]);
+
+    await new Promise((r) => setTimeout(r, 1200));
+
+    // Step 2
+    setMessages((prev) => [
+      ...prev.slice(0, -1),
+      {
+        role: "assistant",
+        content:
+          "🔨 Building your app...\n\n1️⃣ Reading your App Plan... ✅\n2️⃣ Creating the interface...",
+      },
+    ]);
+
+    await new Promise((r) => setTimeout(r, 1400));
+
+    // Step 3
+    setMessages((prev) => [
+      ...prev.slice(0, -1),
+      {
+        role: "assistant",
+        content:
+          "🔨 Building your app...\n\n1️⃣ Reading your App Plan... ✅\n2️⃣ Creating the interface... ✅\n3️⃣ Adding the requested functionality...",
+      },
+    ]);
+
+    await new Promise((r) => setTimeout(r, 1500));
+
+    // Step 4
+    setMessages((prev) => [
+      ...prev.slice(0, -1),
+      {
+        role: "assistant",
+        content:
+          "🔨 Building your app...\n\n1️⃣ Reading your App Plan... ✅\n2️⃣ Creating the interface... ✅\n3️⃣ Adding the requested functionality... ✅\n4️⃣ Preparing your live app preview...",
+      },
+    ]);
+
+    try {
+      const reply = await callAI({
+        userContent: `BUILD THE APPLICATION NOW using this App Plan:\n\n${appPlan}\n\nReturn ONLY one complete HTML application. Start with <!DOCTYPE html> and end with </html>.`,
+        system: MODES.app.system,
+      });
+
+      const html = extractHtml(reply);
+
+      if (html) {
+        setGeneratedHtml(html);
+        setShowPreview(true);
+
+        setMessages((prev) => [
+          ...prev.slice(0, -1),
+          {
+            role: "assistant",
+            content:
+              "✅ Your app has been built successfully!\n\nYour live app is now ready below.",
+          },
+        ]);
+      } else {
+        setMessages((prev) => [
+          ...prev.slice(0, -1),
+          {
+            role: "assistant",
+            content: "⚠️ Could not generate the full app. Please try building again.",
+          },
+        ]);
+      }
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev.slice(0, -1),
+        { role: "assistant", content: "⚠️ Build failed. Please try again." },
+      ]);
+    } finally {
+      setBuilding(false);
+      setLoading(false);
+    }
+  }
