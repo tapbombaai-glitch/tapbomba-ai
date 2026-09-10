@@ -17,19 +17,30 @@ placeholder: "Tell BOMBA AI what content you need...",
 welcome:
 "✨ Content Creator Mode ON\n\nTell me what you want to create. I can help with social media posts, captions, adverts, product descriptions, promotional messages, and business content.",
 system:
-"You are BOMBA AI Content Creator, a practical AI assistant for Nigerian and African business owners. Help users create social media posts, captions, adverts, product descriptions, promotional messages, and business content. Be practical, clear and useful.",
+"You are BOMBA AI Content Creator. Help Nigerian and African businesses create practical social media posts, captions, adverts, product descriptions, promotional messages and business content.",
+},
+
+flyer: {
+name: "Flyer Generator",
+icon: "🎨",
+description: "Create • Square • Download",
+placeholder: "Describe the flyer you want...",
+welcome:
+"🎨 Flyer Generator ON\n\nCreate a professional square 1:1 flyer for your business, product, event, promotion or service.",
+system:
+"You are BOMBA AI Flyer Generator. Help users plan professional square 1:1 promotional flyers. Focus only on flyer content, layout, headline, description, price, contact information and visual direction.",
 },
 
 app: {
 name: "App Builder",
 icon: "🚀",
-description: "Plan • Build • Preview • Deploy",
+description: "Plan • Build • Preview",
 placeholder: "Describe any app you want to build...",
 welcome:
-'🚀 BOMBA AI App Builder ON\n\nDescribe ANY app you want in normal language. I will create an App Plan first. Then you can click "Build This App 🚀" to generate the app.',
+'🚀 App Builder ON\n\nDescribe the app you want to build. I will create a clear App Plan first. Then you can click "Build This App 🚀".',
 system:
 "You are BOMBA AI Universal App Builder.\n\n" +
-"The user's latest app request is the current specification.\n" +
+"Use the user's latest app request as the current specification.\n" +
 "Do not unnecessarily reuse unrelated older requests.\n\n" +
 "FIRST create a clear App Plan containing:\n" +
 "- App name\n" +
@@ -44,16 +55,26 @@ system:
 "- Admin structure if requested\n" +
 "- Design/UI\n" +
 "- Functional behavior\n\n" +
-'End every plan with: Ready to build? Click Build This App 🚀 below.\n\n' +
-"Only generate the application when the user explicitly requests the build.\n" +
-"When building, return the complete standalone HTML application in one HTML code block.\n" +
-"Do not claim functionality that was not actually implemented.",
+'End the plan with: Ready to build? Click Build This App 🚀 below.\n\n' +
+"When building, return one complete standalone HTML application.",
+},
+
+logo: {
+name: "Logo Generator",
+icon: "🪪",
+description: "Brand • Logo • Identity",
+placeholder: "Describe the logo you want...",
+welcome:
+"🪪 Logo Generator ON\n\nTell me your business name and the style you want. I can create a professional logo concept for your brand.",
+system:
+"You are BOMBA AI Logo Generator. Create professional logo concepts for businesses and brands. Focus only on brand name, symbol, typography, style, layout and colors. When requested to generate a logo, return a complete SVG logo.",
 },
 };
 
 export default function Home() {
 const [mode, setMode] = useState("content");
 const [message, setMessage] = useState("");
+
 const [messages, setMessages] = useState([
 {
 role: "assistant",
@@ -66,7 +87,14 @@ const [loading, setLoading] = useState(false);
 const [appPlan, setAppPlan] = useState("");
 const [generatedHtml, setGeneratedHtml] = useState("");
 const [showPreview, setShowPreview] = useState(false);
+
 const [building, setBuilding] = useState(false);
+const [buildProgress, setBuildProgress] = useState(0);
+const [buildStage, setBuildStage] = useState("");
+
+const [logoSvg, setLogoSvg] = useState("");
+const [showLogo, setShowLogo] = useState(false);
+
 const [copied, setCopied] = useState(false);
 const [copiedMessageIndex, setCopiedMessageIndex] = useState(null);
 
@@ -74,7 +102,7 @@ const messagesEndRef = useRef(null);
 
 useEffect(() => {
 document.body.style.margin = "0";
-document.body.style.background = "#030303";
+document.body.style.background = "#000";
 document.body.style.color = "#fff";
 
 return () => {
@@ -89,10 +117,11 @@ useEffect(() => {
 messagesEndRef.current?.scrollIntoView({
 behavior: "smooth",
 });
-}, [messages, loading, showPreview]);
+}, [messages, loading, showPreview, showLogo]);
 
 function switchMode(newMode) {
 setMode(newMode);
+setMessage("");
 
 setMessages([
   {
@@ -101,13 +130,19 @@ setMessages([
   },
 ]);
 
-setMessage("");
 setAppPlan("");
 setGeneratedHtml("");
 setShowPreview(false);
+
+setLogoSvg("");
+setShowLogo(false);
+
 setCopied(false);
 setCopiedMessageIndex(null);
+
 setBuilding(false);
+setBuildProgress(0);
+setBuildStage("");
 setLoading(false);
 
 }
@@ -117,7 +152,9 @@ if (!text) return null;
 
 const fenced = text.match(/```html\s*([\s\S]*?)```/i);
 
-if (fenced?.[1]) return fenced[1].trim();
+if (fenced?.[1]) {
+  return fenced[1].trim();
+}
 
 const generic = text.match(/```\s*([\s\S]*?)```/);
 
@@ -143,16 +180,40 @@ return null;
 
 }
 
+function extractSvgFromReply(text) {
+if (!text) return null;
+
+const fenced = text.match(/```svg\s*([\s\S]*?)```/i);
+
+if (fenced?.[1] && /<svg[\s>]/i.test(fenced[1])) {
+  return fenced[1].trim();
+}
+
+const start = text.search(/<svg[\s>]/i);
+
+if (start >= 0) {
+  const svg = text.slice(start).trim();
+  const end = svg.search(/<\/svg>\s*$/i);
+
+  if (end >= 0) {
+    return svg.slice(0, end + 6).trim();
+  }
+}
+
+return null;
+
+}
+
 function isPlanReply(text) {
 if (!text) return false;
-
-const containsHtml =
-  /<!doctype html|<html[\s>]|```html/i.test(text);
 
 const hasPlan =
   /app name|purpose|features|screens|navigation|user flow|data needed|database|design|ui/i.test(
     text
   );
+
+const containsHtml =
+  /<!doctype html|<html[\s>]|```html/i.test(text);
 
 return !containsHtml && hasPlan;
 
@@ -179,7 +240,9 @@ try {
 }
 
 if (!response.ok) {
-  throw new Error(data?.error || "The AI server returned an error.");
+  throw new Error(
+    data?.error || "The AI server returned an error."
+  );
 }
 
 return (
@@ -197,7 +260,9 @@ event.preventDefault();
 
 const trimmed = message.trim();
 
-if (!trimmed || loading || building) return;
+if (!trimmed || loading || building) {
+  return;
+}
 
 setMessages((prev) => [
   ...prev,
@@ -215,7 +280,11 @@ if (mode === "app") {
   setAppPlan("");
   setGeneratedHtml("");
   setShowPreview(false);
-  setCopied(false);
+}
+
+if (mode === "logo") {
+  setLogoSvg("");
+  setShowLogo(false);
 }
 
 try {
@@ -235,6 +304,15 @@ try {
     }
   }
 
+  if (mode === "logo") {
+    const svg = extractSvgFromReply(reply);
+
+    if (svg) {
+      setLogoSvg(svg);
+      setShowLogo(true);
+    }
+  }
+
   setMessages((prev) => [
     ...prev,
     {
@@ -243,7 +321,7 @@ try {
     },
   ]);
 } catch (error) {
-  console.error(error);
+  console.error("BOMBA AI error:", error);
 
   setMessages((prev) => [
     ...prev,
@@ -260,11 +338,27 @@ try {
 }
 
 async function handleBuildApp() {
-if (!appPlan || building) return;
+if (!appPlan || building) {
+return;
+}
 
 setBuilding(true);
 setLoading(true);
 setShowPreview(false);
+setBuildProgress(0);
+
+const stages = [
+  "Understanding the app requirements",
+  "Creating the application structure",
+  "Designing the data structure",
+  "Designing money and payment structure",
+  "Building screens and navigation",
+  "Adding forms and interactions",
+  "Connecting application logic",
+  "Polishing the mobile interface",
+  "Testing the application structure",
+  "Preparing the live preview",
+];
 
 setMessages((prev) => [
   ...prev,
@@ -275,16 +369,26 @@ setMessages((prev) => [
   {
     role: "assistant",
     content:
-      "🔨 Building your application...\n\n" +
-      "1️⃣ Understanding the requirements\n" +
-      "2️⃣ Creating the application structure\n" +
-      "3️⃣ Designing the data and money structure\n" +
-      "4️⃣ Building screens and navigation\n" +
-      "5️⃣ Adding functionality\n" +
-      "6️⃣ Preparing the live preview\n\n" +
-      "Please wait...",
+      "🔨 BUILDING YOUR APP\n\n" +
+      "BOMBA AI is turning the approved App Plan into an application.\n\n" +
+      "The build process has started...",
   },
 ]);
+
+let stageIndex = 0;
+
+setBuildStage(stages[0]);
+
+const progressTimer = setInterval(() => {
+  stageIndex += 1;
+
+  if (stageIndex < stages.length) {
+    setBuildStage(stages[stageIndex]);
+    setBuildProgress(
+      Math.round((stageIndex / stages.length) * 90)
+    );
+  }
+}, 700);
 
 const buildPrompt =
   "BUILD THE APPLICATION NOW.\n\n" +
@@ -293,15 +397,17 @@ const buildPrompt =
   "\n\n" +
   "BUILD REQUIREMENTS:\n" +
   "- Create a complete functional mobile-friendly application.\n" +
-  "- Include the requested screens, navigation and features.\n" +
-  "- Include requested data, money and admin structures.\n" +
+  "- Include all requested screens and navigation.\n" +
+  "- Include requested database/data structures.\n" +
+  "- Include requested money/payment structures.\n" +
+  "- Include requested admin functionality.\n" +
   "- Make important buttons and interactions functional.\n" +
   "- Make the interface professional.\n" +
-  "- Keep the generated app self-contained.\n" +
+  "- Keep the generated application self-contained.\n" +
   "- CSS must be inside the HTML.\n" +
   "- JavaScript must be inside the HTML.\n" +
-  "- Do not include the BOMBA AI chat interface.\n" +
-  "- Do not include the BOMBA AI header or logo.\n" +
+  "- Do not include BOMBA AI's chat interface.\n" +
+  "- Do not include BOMBA AI's header or logo.\n" +
   "- Build ONLY the requested application.\n" +
   "- Return ONLY one complete HTML code block.\n" +
   "- Start with <!DOCTYPE html>.\n" +
@@ -313,9 +419,13 @@ try {
     system: MODES.app.system,
   });
 
+  clearInterval(progressTimer);
+
   const html = extractHtmlFromReply(reply);
 
   if (html) {
+    setBuildProgress(100);
+    setBuildStage("Build complete — preparing preview");
     setGeneratedHtml(html);
     setShowPreview(true);
 
@@ -324,7 +434,7 @@ try {
       {
         role: "assistant",
         content:
-          "✅ Your application has been generated.\n\nThe live preview is ready below.",
+          "✅ APP BUILD COMPLETE\n\nYour application has been generated and the live preview is ready below.",
       },
     ]);
   } else {
@@ -333,12 +443,14 @@ try {
       {
         role: "assistant",
         content:
-          "⚠️ The AI responded, but I could not find the complete application HTML. Please try the build again.",
+          "⚠️ The AI responded, but I could not find the complete application HTML. Please build again.",
       },
     ]);
   }
 } catch (error) {
-  console.error(error);
+  clearInterval(progressTimer);
+
+  console.error("App build error:", error);
 
   setMessages((prev) => [
     ...prev,
@@ -391,26 +503,18 @@ try {
 
     document.body.removeChild(textarea);
 
-    if (messageIndex !== null) {
-      setCopiedMessageIndex(messageIndex);
+    setCopied(true);
 
-      setTimeout(() => {
-        setCopiedMessageIndex(null);
-      }, 2500);
-    } else {
-      setCopied(true);
-
-      setTimeout(() => {
-        setCopied(false);
-      }, 3000);
-    }
+    setTimeout(() => {
+      setCopied(false);
+    }, 3000);
   } catch {
     setMessages((prev) => [
       ...prev,
       {
         role: "assistant",
         content:
-          "⚠️ Automatic copying failed. Please copy the text manually.",
+          "⚠️ Automatic copying failed. Please copy manually.",
       },
     ]);
   }
@@ -439,6 +543,27 @@ URL.revokeObjectURL(url);
 
 }
 
+function downloadLogo() {
+if (!logoSvg) return;
+
+const blob = new Blob([logoSvg], {
+  type: "image/svg+xml;charset=utf-8",
+});
+
+const url = URL.createObjectURL(blob);
+const link = document.createElement("a");
+
+link.href = url;
+link.download = "bomba-logo.svg";
+
+document.body.appendChild(link);
+link.click();
+document.body.removeChild(link);
+
+URL.revokeObjectURL(url);
+
+}
+
 const lastMessage = messages[messages.length - 1];
 
 const showBuildButton =
@@ -453,40 +578,40 @@ return (
 style={{
 minHeight: "100vh",
 background:
-"radial-gradient(circle at top, #161616 0%, #070707 35%, #000 75%)",
+"radial-gradient(circle at 50% -10%, #202020 0%, #090909 38%, #000 78%)",
 color: "#fff",
 fontFamily:
 "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-paddingBottom: "110px",
+paddingBottom: "105px",
 }}
 >
-{/* PROFESSIONAL BOMBA AI HEADER */}
+{/* MAIN BOMBA AI BRAND */}
 <header
 style={{
 padding: "24px 18px 20px",
 textAlign: "center",
 borderBottom: "1px solid #242424",
-background: "rgba(3,3,3,0.96)",
+background: "rgba(0,0,0,.88)",
 position: "sticky",
 top: 0,
 zIndex: 50,
-backdropFilter: "blur(12px)",
+backdropFilter: "blur(14px)",
 }}
 >
 <div
 style={{
-width: "70px",
-height: "70px",
+width: "72px",
+height: "72px",
 margin: "0 auto 12px",
 borderRadius: "22px",
 background:
-"linear-gradient(145deg, #FFD43B 0%, #F5B800 100%)",
+"linear-gradient(145deg,#FFE477 0%,#FFD43B 45%,#E5A900 100%)",
 display: "flex",
 alignItems: "center",
 justifyContent: "center",
-boxShadow:
-"0 0 0 1px rgba(255,212,59,.35), 0 10px 35px rgba(255,212,59,.18)",
 position: "relative",
+boxShadow:
+"0 12px 40px rgba(255,212,59,.18)",
 }}
 >
 <div
@@ -494,18 +619,17 @@ style={{
 position: "absolute",
 inset: "5px",
 borderRadius: "18px",
-border: "1px solid rgba(0,0,0,.18)",
+border: "1px solid rgba(0,0,0,.22)",
 }}
 />
 
       <div
         style={{
-          fontSize: "25px",
-          fontWeight: 1000,
-          letterSpacing: "-2px",
           color: "#050505",
+          fontSize: "26px",
+          fontWeight: 1000,
+          letterSpacing: "-2.5px",
           position: "relative",
-          lineHeight: 1,
         }}
       >
         TB
@@ -514,8 +638,8 @@ border: "1px solid rgba(0,0,0,.18)",
       <div
         style={{
           position: "absolute",
-          bottom: "8px",
           right: "9px",
+          bottom: "9px",
           width: "7px",
           height: "7px",
           borderRadius: "50%",
@@ -527,9 +651,9 @@ border: "1px solid rgba(0,0,0,.18)",
     <h1
       style={{
         margin: 0,
-        fontSize: "31px",
+        fontSize: "32px",
         fontWeight: 950,
-        letterSpacing: "-1px",
+        letterSpacing: "-1.2px",
       }}
     >
       BOMBA <span style={{ color: BRAND.accent }}>AI</span>
@@ -553,10 +677,12 @@ border: "1px solid rgba(0,0,0,.18)",
       padding: "18px",
     }}
   >
+    {/* FOUR TOOLS */}
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+        gridTemplateColumns:
+          "repeat(2,minmax(0,1fr))",
         gap: "10px",
         marginBottom: "22px",
       }}
@@ -564,10 +690,10 @@ border: "1px solid rgba(0,0,0,.18)",
       {Object.entries(MODES).map(([key, item]) => (
         <button
           key={key}
-          onClick={() => switchMode(key)}
           type="button"
+          onClick={() => switchMode(key)}
           style={{
-            padding: "15px 10px",
+            padding: "15px 9px",
             borderRadius: "15px",
             border:
               mode === key
@@ -575,14 +701,15 @@ border: "1px solid rgba(0,0,0,.18)",
                 : "1px solid #292929",
             background:
               mode === key
-                ? "linear-gradient(145deg,#FFD43B,#F5B800)"
+                ? "linear-gradient(145deg,#FFD43B,#EBAF00)"
                 : "#101010",
-            color: mode === key ? "#000" : "#fff",
+            color:
+              mode === key ? "#000" : "#fff",
             fontWeight: 850,
             cursor: "pointer",
             boxShadow:
               mode === key
-                ? "0 8px 25px rgba(255,212,59,.10)"
+                ? "0 8px 28px rgba(255,212,59,.12)"
                 : "none",
           }}
         >
@@ -604,12 +731,49 @@ border: "1px solid rgba(0,0,0,.18)",
       ))}
     </div>
 
+    {/* FLYER QUICK START */}
+    {mode === "flyer" && (
+      <div
+        style={{
+          marginBottom: "18px",
+          padding: "15px",
+          borderRadius: "16px",
+          background: "#0d0d0d",
+          border: "1px solid #292929",
+        }}
+      >
+        <div
+          style={{
+            color: BRAND.accent,
+            fontWeight: 900,
+            marginBottom: "6px",
+          }}
+        >
+          🎨 Square Flyer
+        </div>
+
+        <div
+          style={{
+            color: "#aaa",
+            fontSize: "13px",
+            lineHeight: 1.5,
+          }}
+        >
+          Ask BOMBA AI for the flyer content and design.
+          Your flyer direction is designed for a square
+          1:1 format.
+        </div>
+      </div>
+    )}
+
+    {/* CHAT */}
     {messages.map((msg, index) => (
       <div
         key={index}
         style={{
           marginBottom: "16px",
-          textAlign: msg.role === "user" ? "right" : "left",
+          textAlign:
+            msg.role === "user" ? "right" : "left",
         }}
       >
         <div
@@ -620,10 +784,9 @@ border: "1px solid rgba(0,0,0,.18)",
             borderRadius: "16px",
             background:
               msg.role === "user"
-                ? "linear-gradient(145deg,#202020,#151515)"
+                ? "#1b1b1b"
                 : "#0d0d0d",
             border: "1px solid #252525",
-            boxShadow: "0 8px 30px rgba(0,0,0,.22)",
             whiteSpace: "pre-wrap",
             lineHeight: 1.55,
             textAlign: "left",
@@ -635,7 +798,9 @@ border: "1px solid rgba(0,0,0,.18)",
             <div style={{ marginTop: "10px" }}>
               <button
                 type="button"
-                onClick={() => copyToClipboard(msg.content, index)}
+                onClick={() =>
+                  copyToClipboard(msg.content, index)
+                }
                 style={{
                   padding: "8px 12px",
                   borderRadius: "9px",
@@ -657,6 +822,61 @@ border: "1px solid rgba(0,0,0,.18)",
       </div>
     ))}
 
+    {/* APP BUILD PROGRESS */}
+    {building && (
+      <div
+        style={{
+          margin: "18px 0",
+          padding: "18px",
+          borderRadius: "17px",
+          background: "#0c0c0c",
+          border: "1px solid #FFD43B",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            marginBottom: "10px",
+            fontWeight: 850,
+          }}
+        >
+          <span>🚀 Building App</span>
+          <span style={{ color: BRAND.accent }}>
+            {buildProgress}%
+          </span>
+        </div>
+
+        <div
+          style={{
+            height: "9px",
+            borderRadius: "99px",
+            background: "#222",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              width: `${buildProgress}%`,
+              height: "100%",
+              background: BRAND.accent,
+              transition: "width .4s ease",
+            }}
+          />
+        </div>
+
+        <div
+          style={{
+            marginTop: "12px",
+            color: "#bbb",
+            fontSize: "14px",
+          }}
+        >
+          {buildStage}
+        </div>
+      </div>
+    )}
+
     {loading && !building && (
       <div
         style={{
@@ -669,36 +889,38 @@ border: "1px solid rgba(0,0,0,.18)",
       </div>
     )}
 
+    {/* BUILD BUTTON */}
     {showBuildButton && (
       <button
-        onClick={handleBuildApp}
-        disabled={building}
         type="button"
+        onClick={handleBuildApp}
         style={{
           width: "100%",
           padding: "17px",
-          marginTop: "10px",
+          marginTop: "8px",
           marginBottom: "20px",
           borderRadius: "14px",
           border: "none",
           background:
-            "linear-gradient(145deg,#FFD43B,#F5B800)",
+            "linear-gradient(145deg,#FFE477,#FFD43B,#EBAF00)",
           color: "#000",
           fontSize: "17px",
-          fontWeight: 900,
+          fontWeight: 950,
           cursor: "pointer",
-          boxShadow: "0 10px 30px rgba(255,212,59,.15)",
+          boxShadow:
+            "0 12px 35px rgba(255,212,59,.16)",
         }}
       >
         🚀 Build This App
       </button>
     )}
 
+    {/* APP PREVIEW */}
     {showPreview && generatedHtml && (
       <section
         style={{
           marginTop: "20px",
-          background: "#0c0c0c",
+          background: "#0b0b0b",
           border: "1px solid #FFD43B",
           borderRadius: "17px",
           padding: "12px",
@@ -721,8 +943,10 @@ border: "1px solid rgba(0,0,0,.18)",
           }}
         >
           <button
-            onClick={() => copyToClipboard(generatedHtml)}
             type="button"
+            onClick={() =>
+              copyToClipboard(generatedHtml)
+            }
             style={{
               flex: 1,
               padding: "15px 8px",
@@ -734,12 +958,14 @@ border: "1px solid rgba(0,0,0,.18)",
               cursor: "pointer",
             }}
           >
-            {copied ? "✅ Copied!" : "📋 Copy Full App"}
+            {copied
+              ? "✅ Copied!"
+              : "📋 Copy Full App"}
           </button>
 
           <button
-            onClick={handleDownloadApp}
             type="button"
+            onClick={handleDownloadApp}
             style={{
               flex: 1,
               padding: "15px 8px",
@@ -770,9 +996,67 @@ border: "1px solid rgba(0,0,0,.18)",
       </section>
     )}
 
+    {/* LOGO PREVIEW */}
+    {showLogo && logoSvg && (
+      <section
+        style={{
+          marginTop: "20px",
+          padding: "16px",
+          borderRadius: "18px",
+          background:
+            "linear-gradient(145deg,#111,#080808)",
+          border: "1px solid #FFD43B",
+        }}
+      >
+        <h2
+          style={{
+            margin: "0 0 12px",
+            color: BRAND.accent,
+          }}
+        >
+          🪪 Your Generated Logo
+        </h2>
+
+        <div
+          style={{
+            minHeight: "260px",
+            borderRadius: "15px",
+            background: "#fff",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+            overflow: "hidden",
+          }}
+          dangerouslySetInnerHTML={{
+            __html: logoSvg,
+          }}
+        />
+
+        <button
+          type="button"
+          onClick={downloadLogo}
+          style={{
+            width: "100%",
+            marginTop: "12px",
+            padding: "15px",
+            borderRadius: "13px",
+            border: "none",
+            background: BRAND.accent,
+            color: "#000",
+            fontWeight: 900,
+            cursor: "pointer",
+          }}
+        >
+          ⬇️ Download Logo
+        </button>
+      </section>
+    )}
+
     <div ref={messagesEndRef} />
   </section>
 
+  {/* INPUT */}
   <form
     onSubmit={handleSubmit}
     style={{
@@ -791,9 +1075,14 @@ border: "1px solid rgba(0,0,0,.18)",
   >
     <textarea
       value={message}
-      onChange={(event) => setMessage(event.target.value)}
+      onChange={(event) =>
+        setMessage(event.target.value)
+      }
       onKeyDown={(event) => {
-        if (event.key === "Enter" && !event.shiftKey) {
+        if (
+          event.key === "Enter" &&
+          !event.shiftKey
+        ) {
           event.preventDefault();
 
           if (!loading && !building) {
@@ -819,19 +1108,27 @@ border: "1px solid rgba(0,0,0,.18)",
 
     <button
       type="submit"
-      disabled={loading || building || !message.trim()}
+      disabled={
+        loading ||
+        building ||
+        !message.trim()
+      }
       style={{
         padding: "0 18px",
         borderRadius: "13px",
         background:
-          loading || building || !message.trim()
+          loading ||
+          building ||
+          !message.trim()
             ? "#444"
             : BRAND.accent,
         color: "#000",
         fontWeight: 900,
         border: "none",
         cursor:
-          loading || building || !message.trim()
+          loading ||
+          building ||
+          !message.trim()
             ? "not-allowed"
             : "pointer",
       }}
