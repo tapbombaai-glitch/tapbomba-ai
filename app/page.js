@@ -28,15 +28,48 @@ const MODES = {
     welcome:
       '🚀 BOMBA AI App Builder ON\n\nDescribe ANY app you want in normal language. I will create an App Plan first. Then you can click "Build This App 🚀" to generate the app.',
     system:
-      'You are BOMBA AI Universal App Builder. Help users turn natural-language ideas into real applications. When the user describes an app idea, create a clear App Plan with the app name, purpose, features, screens, user flow, data needed and design. End the plan with exactly: "Ready to build? Click Build This App 🚀 below." When the user asks to build the app, generate a complete single-file HTML application.',
+      `You are BOMBA AI Universal App Builder.
+
+IMPORTANT APP BUILDER RULES:
+
+1. The user's latest request is the current app request.
+2. Do not unnecessarily reuse unrelated older app requests.
+3. First create an APP PLAN. Do not generate the actual application code yet.
+4. The App Plan must clearly include:
+   - App name
+   - Purpose
+   - Main features
+   - Screens/pages
+   - Navigation
+   - User flow
+   - Data needed
+   - Design/UI
+   - Functional behavior
+5. End every new App Plan with exactly:
+Ready to build? Click Build This App 🚀 below.
+6. Only generate application code when the user clicks Build This App 🚀.
+7. When building, create a complete functional mobile-friendly application.
+8. Return the complete application inside one ```html code block.
+9. The HTML must contain its CSS and JavaScript so it can work as a standalone HTML file.
+10. Do not say the app is built if you did not provide the complete HTML.
+11. Make buttons and important interactions functional.
+12. Keep the generated application focused on the user's latest app request.
+13. Do not add unrelated features from previous requests.`,
   },
 };
 
+type ModeKey = keyof typeof MODES;
+
+type Message = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 export default function Home() {
-  const [mode, setMode] = useState("content");
+  const [mode, setMode] = useState<ModeKey>("content");
   const [message, setMessage] = useState("");
 
-  const [messages, setMessages] = useState([
+  const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
       content:
@@ -51,7 +84,7 @@ export default function Home() {
   const [building, setBuilding] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const messagesEndRef = useRef(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({
@@ -59,7 +92,7 @@ export default function Home() {
     });
   }, [messages, loading, showPreview]);
 
-  function switchMode(newMode) {
+  function switchMode(newMode: ModeKey) {
     setMode(newMode);
 
     setMessages([
@@ -74,48 +107,89 @@ export default function Home() {
     setGeneratedHtml("");
     setShowPreview(false);
     setCopied(false);
+    setBuilding(false);
+    setLoading(false);
   }
 
-  function extractHtmlFromReply(text) {
+  function extractHtmlFromReply(text: string): string | null {
     if (!text) {
       return null;
     }
 
-    const match = text.match(
+    const fencedMatch = text.match(
       /```html\s*([\s\S]*?)```/i
     );
 
-    if (match && match[1]) {
-      return match[1].trim();
+    if (fencedMatch?.[1]) {
+      return fencedMatch[1].trim();
+    }
+
+    const genericFencedMatch = text.match(
+      /```\s*([\s\S]*?)```/
+    );
+
+    if (
+      genericFencedMatch?.[1] &&
+      /<(!doctype|html|head|body)/i.test(
+        genericFencedMatch[1]
+      )
+    ) {
+      return genericFencedMatch[1].trim();
+    }
+
+    const htmlStart = text.search(
+      /<!doctype html|<html[\s>]/i
+    );
+
+    if (htmlStart >= 0) {
+      const possibleHtml = text
+        .slice(htmlStart)
+        .trim();
+
+      const htmlEnd = possibleHtml.search(
+        /<\/html>\s*$/i
+      );
+
+      if (htmlEnd >= 0) {
+        return possibleHtml
+          .slice(0, htmlEnd + 7)
+          .trim();
+      }
     }
 
     return null;
   }
 
-  // Detects an App Plan using its structure,
-  // not one exact phrase.
-  function isPlanReply(text) {
+  function isPlanReply(text: string): boolean {
     if (!text) {
       return false;
     }
 
-    const hasStructure =
-      /features?/i.test(text) &&
-      /design|ui|ux/i.test(text) &&
-      /next steps?|development|build/i.test(text);
-
-    const hasAppSections =
-      /product|catalog|cart|checkout|profile|user|screen|navigation/i.test(
+    const hasBuildInstruction =
+      /Ready to build\?\s*Click Build This App/i.test(
         text
       );
 
-    return hasStructure || hasAppSections;
+    const hasPlanSections =
+      /app name|purpose|features|screens|navigation|user flow|design|ui|data needed/i.test(
+        text
+      );
+
+    const containsHtml =
+      /<!doctype html|<html[\s>]|```html/i.test(text);
+
+    return (
+      !containsHtml &&
+      (hasBuildInstruction || hasPlanSections)
+    );
   }
 
   async function callAI({
     userContent,
     system,
-    history,
+  }: {
+    userContent: string;
+    system: string;
   }) {
     const response = await fetch("/api/chat", {
       method: "POST",
@@ -125,11 +199,10 @@ export default function Home() {
       body: JSON.stringify({
         message: userContent,
         system,
-        history,
       }),
     });
 
-    let data;
+    let data: any;
 
     try {
       data = await response.json();
@@ -146,10 +219,18 @@ export default function Home() {
       );
     }
 
-    return data?.reply || data?.message || "";
+    return (
+      data?.reply ||
+      data?.message ||
+      data?.content ||
+      data?.output ||
+      ""
+    );
   }
 
-  async function handleSubmit(event) {
+  async function handleSubmit(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
 
     const trimmed = message.trim();
@@ -158,43 +239,58 @@ export default function Home() {
       return;
     }
 
-    const userMessage = {
+    /*
+     * IMPORTANT:
+     * For every new request we send ONLY the latest request
+     * to the API. This prevents old unrelated app requests
+     * from being carried into a new task.
+     */
+    const userMessage: Message = {
       role: "user",
       content: trimmed,
     };
 
-    const updatedMessages = [
-      ...messages,
+    setMessages((prev) => [
+      ...prev,
       userMessage,
-    ];
+    ]);
 
-    setMessages(updatedMessages);
     setMessage("");
     setLoading(true);
+
+    /*
+     * Starting a fresh App Builder request must also clear
+     * the previous generated app and previous plan.
+     */
+    if (mode === "app") {
+      setAppPlan("");
+      setGeneratedHtml("");
+      setShowPreview(false);
+      setCopied(false);
+    }
 
     try {
       const reply = await callAI({
         userContent: trimmed,
         system: MODES[mode].system,
-        history: updatedMessages.slice(-12),
       });
 
-      if (
-        mode === "app" &&
-        isPlanReply(reply)
-      ) {
-        setAppPlan(reply);
-        setGeneratedHtml("");
-        setShowPreview(false);
-        setCopied(false);
-      }
+      if (mode === "app") {
+        const html = extractHtmlFromReply(reply);
 
-      const html = extractHtmlFromReply(reply);
-
-      if (mode === "app" && html) {
-        setGeneratedHtml(html);
-        setShowPreview(true);
-        setCopied(false);
+        /*
+         * A normal App Builder request should produce a plan,
+         * not an application immediately.
+         */
+        if (html) {
+          setGeneratedHtml(html);
+          setShowPreview(true);
+          setAppPlan("");
+        } else if (isPlanReply(reply)) {
+          setAppPlan(reply);
+          setGeneratedHtml("");
+          setShowPreview(false);
+        }
       }
 
       setMessages((prev) => [
@@ -206,14 +302,14 @@ export default function Home() {
         },
       ]);
     } catch (error) {
-      console.error(error);
+      console.error("BOMBA AI error:", error);
 
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
           content:
-            "⚠️ I couldn't connect to the AI server. Please check the API route and OpenAI API key.",
+            "⚠️ I couldn't connect to the AI server. Please try again.",
         },
       ]);
     } finally {
@@ -229,6 +325,7 @@ export default function Home() {
     setBuilding(true);
     setLoading(true);
     setCopied(false);
+    setShowPreview(false);
 
     setMessages((prev) => [
       ...prev,
@@ -236,30 +333,45 @@ export default function Home() {
         role: "user",
         content: "Build This App 🚀",
       },
+      {
+        role: "assistant",
+        content:
+          "🔨 Building your app step by step...\n\n1️⃣ Reading the App Plan\n2️⃣ Creating the interface\n3️⃣ Adding the app functionality\n4️⃣ Preparing the live preview\n\nPlease wait...",
+      },
     ]);
 
-    const buildPrompt = `Build This App 🚀
+    /*
+     * IMPORTANT:
+     * The build request contains the plan only.
+     * It does NOT include the old chat history.
+     */
+    const buildPrompt = `BUILD THE APPLICATION NOW.
 
-Use the following App Plan to generate the complete application.
-
-Return the entire application as a single HTML file.
-
-The application should be mobile-friendly and functional.
+Use ONLY this App Plan as the specification for the application.
 
 APP PLAN:
+${appPlan}
 
-${appPlan}`;
+BUILD REQUIREMENTS:
+
+- Create a complete functional application.
+- Make it mobile-friendly.
+- Make the UI professional.
+- Include the requested screens and features.
+- Make buttons and interactions functional where possible.
+- Keep everything self-contained.
+- Put CSS inside the HTML.
+- Put JavaScript inside the HTML.
+- Do not use a separate CSS or JS file.
+- Return ONLY the complete application inside one html code block.
+- Start with <!DOCTYPE html>.
+- End with </html>.
+- Do not return an explanation outside the code block.`;
 
     try {
       const reply = await callAI({
         userContent: buildPrompt,
         system: MODES.app.system,
-        history: [
-          {
-            role: "assistant",
-            content: appPlan,
-          },
-        ],
       });
 
       const html = extractHtmlFromReply(reply);
@@ -273,7 +385,7 @@ ${appPlan}`;
           {
             role: "assistant",
             content:
-              "✅ App built successfully! Your live preview is below.",
+              "✅ App built successfully!\n\nYour live app preview is ready below. You can also copy the complete app.",
           },
         ]);
       } else {
@@ -282,12 +394,12 @@ ${appPlan}`;
           {
             role: "assistant",
             content:
-              "⚠️ The AI responded, but I could not find the generated HTML code. Please try building again.",
+              "⚠️ The AI responded, but I could not find the complete HTML application. Please tap Build This App 🚀 again.",
           },
         ]);
       }
     } catch (error) {
-      console.error(error);
+      console.error("App build error:", error);
 
       setMessages((prev) => [
         ...prev,
@@ -315,20 +427,47 @@ ${appPlan}`;
 
       setCopied(true);
 
-      setTimeout(() => {
+      window.setTimeout(() => {
         setCopied(false);
       }, 3000);
     } catch (error) {
-      console.error(error);
+      console.error("Copy error:", error);
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content:
-            "⚠️ I couldn't copy the app automatically. Please try again.",
-        },
-      ]);
+      /*
+       * Fallback for some mobile browsers where the
+       * Clipboard API may not be available.
+       */
+      try {
+        const textarea =
+          document.createElement("textarea");
+
+        textarea.value = generatedHtml;
+        textarea.style.position = "fixed";
+        textarea.style.left = "-9999px";
+
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+
+        document.execCommand("copy");
+
+        document.body.removeChild(textarea);
+
+        setCopied(true);
+
+        window.setTimeout(() => {
+          setCopied(false);
+        }, 3000);
+      } catch {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content:
+              "⚠️ I couldn't copy the app automatically. Please try again.",
+          },
+        ]);
+      }
     }
   }
 
@@ -337,9 +476,10 @@ ${appPlan}`;
 
   const showBuildButton =
     mode === "app" &&
-    appPlan &&
-    lastMessage?.role === "assistant" &&
-    !generatedHtml;
+    Boolean(appPlan) &&
+    !generatedHtml &&
+    !building &&
+    lastMessage?.role === "assistant";
 
   return (
     <main
@@ -414,47 +554,51 @@ ${appPlan}`;
             marginBottom: "20px",
           }}
         >
-          {Object.entries(MODES).map(
-            ([key, item]) => (
-              <button
-                key={key}
-                onClick={() => switchMode(key)}
+          {(
+            Object.entries(MODES) as [
+              ModeKey,
+              (typeof MODES)[ModeKey]
+            ][]
+          ).map(([key, item]) => (
+            <button
+              key={key}
+              onClick={() => switchMode(key)}
+              type="button"
+              style={{
+                padding: "15px 10px",
+                borderRadius: "14px",
+                border:
+                  mode === key
+                    ? "2px solid #FFD43B"
+                    : "1px solid #333",
+                background:
+                  mode === key
+                    ? BRAND.accent
+                    : "#111",
+                color:
+                  mode === key
+                    ? "#000"
+                    : "#fff",
+                fontWeight: 800,
+                cursor: "pointer",
+              }}
+            >
+              <div>
+                {item.icon} {item.name}
+              </div>
+
+              <small
                 style={{
-                  padding: "15px 10px",
-                  borderRadius: "14px",
-                  border:
-                    mode === key
-                      ? "2px solid #FFD43B"
-                      : "1px solid #333",
-                  background:
-                    mode === key
-                      ? BRAND.accent
-                      : "#111",
-                  color:
-                    mode === key
-                      ? "#000"
-                      : "#fff",
-                  fontWeight: 800,
-                  cursor: "pointer",
+                  display: "block",
+                  marginTop: "5px",
+                  opacity: 0.7,
+                  fontWeight: 500,
                 }}
               >
-                <div>
-                  {item.icon} {item.name}
-                </div>
-
-                <small
-                  style={{
-                    display: "block",
-                    marginTop: "5px",
-                    opacity: 0.7,
-                    fontWeight: 500,
-                  }}
-                >
-                  {item.description}
-                </small>
-              </button>
-            )
-          )}
+                {item.description}
+              </small>
+            </button>
+          ))}
         </div>
 
         <div>
@@ -494,10 +638,10 @@ ${appPlan}`;
           ))}
         </div>
 
-        {loading && (
+        {loading && !building && (
           <div
             style={{
-              color: "#FFD43B",
+              color: BRAND.accent,
               padding: "10px 0",
               fontWeight: 700,
             }}
@@ -510,6 +654,7 @@ ${appPlan}`;
           <button
             onClick={handleBuildApp}
             disabled={building}
+            type="button"
             style={{
               width: "100%",
               padding: "17px",
@@ -553,6 +698,7 @@ ${appPlan}`;
 
             <button
               onClick={handleCopyFullApp}
+              type="button"
               style={{
                 width: "100%",
                 padding: "16px",
@@ -574,6 +720,7 @@ ${appPlan}`;
             <iframe
               title="BOMBA AI App Preview"
               srcDoc={generatedHtml}
+              sandbox="allow-scripts allow-forms allow-modals"
               style={{
                 width: "100%",
                 height: "700px",
