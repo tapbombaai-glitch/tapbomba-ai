@@ -1,7 +1,12 @@
+import OpenAI from "openai";
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,7 +14,9 @@ export async function POST(req: NextRequest) {
 
     if (!apiKey) {
       return NextResponse.json(
-        { error: "OPENAI_API_KEY is not configured." },
+        {
+          error: "OPENAI_API_KEY is not configured on Render.",
+        },
         { status: 500 }
       );
     }
@@ -17,111 +24,62 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     const message =
-      typeof body.message === "string"
+      typeof body?.message === "string"
         ? body.message.trim()
         : "";
 
-    const imageData =
-      typeof body.imageData === "string"
-        ? body.imageData
+    const system =
+      typeof body?.system === "string"
+        ? body.system.trim()
         : "";
 
     if (!message) {
       return NextResponse.json(
-        { error: "Please describe the flyer you want." },
-        { status: 400 }
-      );
-    }
-
-    if (!imageData) {
-      return NextResponse.json(
-        { error: "Please upload a picture for the flyer." },
-        { status: 400 }
-      );
-    }
-
-    // Basic safety check so we only accept image data.
-    if (!imageData.startsWith("data:image/")) {
-      return NextResponse.json(
-        { error: "The uploaded file is not a valid image." },
-        { status: 400 }
-      );
-    }
-
-    const response = await fetch(
-      "https://api.openai.com/v1/images/generations",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-image-2",
-          prompt: `
-Create a professional square promotional flyer.
-
-Use the uploaded product image as the main visual reference.
-
-User's flyer instructions:
-${message}
-
-Requirements:
-- Square 1024x1024 promotional design.
-- Professional commercial appearance.
-- Make the product clearly visible.
-- Use attractive typography.
-- Make important prices and offers easy to see.
-- Use a clean, modern composition.
-- Do not create a phone mockup.
-- Do not create a webpage screenshot.
-- The final result must look like an actual social-media/business flyer.
-- Do not add random information that the user did not request.
-          `,
-          size: "1024x1024",
-          quality: "medium",
-          n: 1,
-        }),
-      }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error("OpenAI flyer error:", data);
-
-      return NextResponse.json(
         {
-          error:
-            data?.error?.message ||
-            "The flyer generator could not create the image.",
+          error: "Please enter a message.",
         },
-        { status: response.status }
+        { status: 400 }
       );
     }
 
-    const imageBase64 =
-      data?.data?.[0]?.b64_json;
+    const instructions =
+      system ||
+      `
+You are BOMBA AI — a practical and intelligent AI assistant.
 
-    if (!imageBase64) {
-      return NextResponse.json(
-        { error: "No flyer image was returned." },
-        { status: 500 }
-      );
-    }
+IMPORTANT:
+- Answer the user's latest request.
+- Do not unnecessarily continue an unrelated older task.
+- Give clear, useful and practical answers.
+- When appropriate, provide complete copy-and-paste-ready code.
+- Use Nigerian Naira (₦) when discussing Nigerian prices.
+`;
+
+    const response = await openai.responses.create({
+      model: "gpt-4o-mini",
+      instructions,
+      input: message,
+    });
+
+    const reply =
+      response.output_text?.trim() ||
+      "Sorry, I couldn't generate a response.";
 
     return NextResponse.json({
       success: true,
-      image: `data:image/png;base64,${imageBase64}`,
+      reply,
+      message: reply,
+      content: reply,
+      output: reply,
     });
   } catch (error: any) {
-    console.error("Flyer route error:", error);
+    console.error("BOMBA AI API error:", error);
 
     return NextResponse.json(
       {
         error:
           error?.message ||
-          "Something went wrong while creating the flyer.",
+          "The AI server could not process your request.",
       },
       { status: 500 }
     );
