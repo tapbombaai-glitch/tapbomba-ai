@@ -326,12 +326,14 @@ export default function Home() {
       (file) => file.size <= 8 * 1024 * 1024
     );
 
-    if (validFiles.length !== selected.length) {
-      alert(
-        "One or more pictures were larger than 8MB and were not added."
-      );
-    }
+ const validFiles = selected.filter((file) => {
+  return file.size <= 8 * 1024 * 1024;
+});
 
+if (validFiles.length !== selected.length) {
+  alert("One or more pictures were larger than 8MB and were not added.");
+
+    }
     Promise.all(
       validFiles.map(
         (file) =>
