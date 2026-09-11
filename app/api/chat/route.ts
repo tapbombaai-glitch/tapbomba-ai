@@ -1,125 +1,73 @@
 import OpenAI from "openai";
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const openai = new OpenAI({
-apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
-const DEFAULT_SYSTEM = `
-You are BOMBA AI, a practical and intelligent AI assistant.
+export async function POST(req) {
+  try {
+    if (!process.env.OPENAI_API_KEY) {
+      return NextResponse.json(
+        { error: "OPENAI_API_KEY is not configured." },
+        { status: 500 }
+      );
+    }
 
-Your tagline is: "Automate. Grow. Earn."
+    const body = await req.json();
+    const prompt =
+      typeof body?.prompt === "string"
+        ? body.prompt.trim()
+        : "";
 
-Help users with:
+    if (!prompt) {
+      return NextResponse.json(
+        { error: "Please describe the flyer you want." },
+        { status: 400 }
+      );
+    }
 
-- Business ideas
-- Business growth
-- Marketing
-- Social media
-- Content creation
-- Entrepreneurship
-- App and website ideas
-- Productivity
-- General questions
+    const result = await openai.images.generate({
+      model: "gpt-image-2",
+      prompt: `
+Create a professional square promotional flyer.
 
-Give clear, useful and practical answers.
+User request:
+${prompt}
 
-When discussing Nigerian money, use the ₦ symbol.
+Make it polished, attractive, readable, modern, and suitable
+for social media. Do not invent important information.
+Create the actual finished flyer image.
+`,
+      size: "1024x1024",
+    });
 
-Do not pretend to have performed an action that you cannot actually perform.
+    const image = result?.data?.[0]?.b64_json;
 
-Keep answers easy to understand, especially on mobile phones.
-`;
+    if (!image) {
+      return NextResponse.json(
+        { error: "No image was returned by the AI." },
+        { status: 500 }
+      );
+    }
 
-export async function POST(request: NextRequest) {
-try {
-if (!process.env.OPENAI_API_KEY) {
-return NextResponse.json(
-{ error: "OPENAI_API_KEY is not configured." },
-{ status: 500 }
-);
-}
+    return NextResponse.json({
+      success: true,
+      image: `data:image/png;base64,${image}`,
+    });
+  } catch (error) {
+    console.error("BOMBA image error:", error);
 
-const body = await request.json();
-
-const messages = Array.isArray(body?.messages)
-  ? body.messages
-  : [];
-
-const userMessage =
-  typeof body?.message === "string"
-    ? body.message
-    : "";
-
-let chatMessages = messages;
-
-if (chatMessages.length === 0 && userMessage.trim()) {
-  chatMessages = [
-    {
-      role: "user",
-      content: userMessage.trim(),
-    },
-  ];
-}
-
-if (chatMessages.length === 0) {
-  return NextResponse.json(
-    { error: "Please enter a message." },
-    { status: 400 }
-  );
-}
-
-const safeMessages = chatMessages
-  .filter(
-    (message: any) =>
-      message &&
-      (message.role === "user" ||
-        message.role === "assistant" ||
-        message.role === "system") &&
-      typeof message.content === "string"
-  )
-  .map((message: any) => ({
-    role: message.role,
-    content: message.content,
-  }));
-
-const completion = await openai.chat.completions.create({
-  model: "gpt-4o-mini",
-  messages: [
-    {
-      role: "system",
-      content: DEFAULT_SYSTEM,
-    },
-    ...safeMessages,
-  ],
-  temperature: 0.7,
-});
-
-const reply =
-  completion.choices?.[0]?.message?.content ||
-  "Sorry, I could not generate a response.";
-
-return NextResponse.json({
-  success: true,
-  reply,
-  message: reply,
-});
-
-} catch (error: any) {
-console.error("BOMBA AI chat error:", error);
-
-return NextResponse.json(
-  {
-    success: false,
-    error:
-      error?.message ||
-      "Something went wrong while processing your request.",
-  },
-  { status: 500 }
-);
-
-}
+    return NextResponse.json(
+      {
+        error:
+          error?.message ||
+          "BOMBA AI could not generate the flyer.",
+      },
+      { status: 500 }
+    );
+  }
 }
