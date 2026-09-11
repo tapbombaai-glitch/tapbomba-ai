@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const BRAND = {
   name: "BOMBA AI",
@@ -8,1169 +8,1436 @@ const BRAND = {
   accent: "#FFD43B",
 };
 
-const CONTENT_SYSTEM = [
-  "You are BOMBA AI, a practical business and content assistant.",
-  "Create useful, professional content for businesses and entrepreneurs.",
-  "Use Nigerian context and ₦ when money is mentioned.",
-].join(" ");
-
-const APP_PLAN_SYSTEM = [
-  "You are BOMBA AI App Builder.",
-  "Create a clear plan for the NEW app request.",
-  "Do not write HTML or code during the planning step.",
-  "Use these sections: App Name, Purpose, Main Features, Screens, Navigation, User Flow, Data Needed, Design/UI, Functional Behavior.",
-  "Keep the plan practical and easy to understand.",
-  "End with: Ready to build? Click Build This App 🚀 below.",
-].join(" ");
-
-const APP_BUILD_SYSTEM = [
-  "You are BOMBA AI App Builder.",
-  "Build the current app from the user's request and app plan.",
-  "Return ONLY one complete standalone HTML document.",
-  "Start with <!DOCTYPE html> and finish with </html>.",
-  "Include responsive CSS and working JavaScript.",
-  "The result must work directly when opened in a browser.",
-  "Do not use markdown fences.",
-  "Do not explain the code.",
-  "Keep the HTML compact so the complete document is returned.",
-].join(" ");
-
-const INPUT_STYLE = {
-  width: "100%",
-  boxSizing: "border-box",
-  padding: "13px 14px",
-  borderRadius: "10px",
-  border: "1px solid #333",
-  background: "#111",
-  color: "white",
-  fontSize: "15px",
-  outline: "none",
+const DEFAULT_PROJECT = {
+  type: "flyer",
+  businessName: "",
+  headline: "",
+  description: "",
+  price: "",
+  whatsapp: "",
+  image: "",
+  template: "premium",
 };
 
-function escapeHtml(value) {
-  return String(value || "").replace(/[&<>"']/g, (char) => {
-    const map = {
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#039;",
-    };
-    return map[char];
-  });
+const TEMPLATES = {
+  premium: {
+    name: "Premium",
+    label: "PREMIUM",
+    background:
+      "linear-gradient(145deg, #07111f 0%, #101827 48%, #260b0b 100%)",
+    accent: "#FFD43B",
+  },
+
+  sales: {
+    name: "Sales",
+    label: "SALE",
+    background:
+      "linear-gradient(145deg, #260000 0%, #8b0000 48%, #120000 100%)",
+    accent: "#FFD43B",
+  },
+
+  newdrop: {
+    name: "New Drop",
+    label: "NEW DROP",
+    background:
+      "linear-gradient(145deg, #06152a 0%, #0b3b67 55%, #071018 100%)",
+    accent: "#FFD43B",
+  },
+};
+
+function checkWhatsApp(value) {
+  if (!value.trim()) return false;
+
+  const digits = value.replace(/\D/g, "");
+
+  return digits.length >= 10 && digits.length <= 15;
 }
 
-function isPlan(text) {
-  if (!text) return false;
+function analyzeProject(project) {
+  const issues = [];
 
-  const lower = text.toLowerCase();
-
-  if (
-    lower.includes("<!doctype") ||
-    lower.includes("<html") ||
-    lower.includes("```html")
-  ) {
-    return false;
+  if (!project.businessName.trim()) {
+    issues.push({
+      type: "missing",
+      title: "Business name missing",
+      message: "Add your business name so customers know who created the offer.",
+    });
   }
 
-  const sections = [
-    "app name",
-    "purpose",
-    "main features",
-    "screens",
-    "navigation",
-    "user flow",
-    "data needed",
-    "design",
-    "functional behavior",
-  ];
-
-  const matches = sections.filter((section) => lower.includes(section));
-
-  return matches.length >= 4;
-}
-
-function extractHtml(text) {
-  if (!text) return "";
-
-  let html = String(text).trim();
-
-  html = html
-    .replace(/^```html\s*/i, "")
-    .replace(/^```\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .trim();
-
-  const doctypeIndex = html.search(/<!doctype\s+html/i);
-  const htmlIndex = html.search(/<html[\s>]/i);
-
-  let start = -1;
-
-  if (doctypeIndex >= 0) {
-    start = doctypeIndex;
-  } else if (htmlIndex >= 0) {
-    start = htmlIndex;
+  if (!project.headline.trim()) {
+    issues.push({
+      type: "missing",
+      title: "Headline missing",
+      message: "Add a strong headline to tell customers what you are offering.",
+    });
   }
 
-  if (start < 0) return "";
-
-  html = html.slice(start).trim();
-
-  const endIndex = html.search(/<\/html>/i);
-
-  if (endIndex >= 0) {
-    return html.slice(0, endIndex + 7).trim();
+  if (project.headline.length > 65) {
+    issues.push({
+      type: "overflow",
+      title: "Headline may be too long",
+      message: "Shorten the headline so it remains readable on smaller phones.",
+    });
   }
 
-  if (/<body[\s>]/i.test(html)) {
-    if (!/<\/body>/i.test(html)) {
-      html += "</body>";
-    }
-
-    if (!/<\/html>/i.test(html)) {
-      html += "</html>";
-    }
-
-    return html;
+  if (!project.description.trim()) {
+    issues.push({
+      type: "missing",
+      title: "Description missing",
+      message: "Add a short description explaining the product or service.",
+    });
   }
 
-  return "";
+  if (!project.price.trim()) {
+    issues.push({
+      type: "missing",
+      title: "Price missing",
+      message: "Add a price or remove the price section if this offer is free.",
+    });
+  }
+
+  if (!project.whatsapp.trim()) {
+    issues.push({
+      type: "contact",
+      title: "WhatsApp number missing",
+      message: "Add a WhatsApp number so customers can contact you.",
+    });
+  } else if (!checkWhatsApp(project.whatsapp)) {
+    issues.push({
+      type: "contact",
+      title: "WhatsApp number looks wrong",
+      message: "Check the number. Include the country code when possible.",
+    });
+  }
+
+  if (!project.image) {
+    issues.push({
+      type: "image",
+      title: "No product image",
+      message:
+        "Your flyer can work without a photo, but adding a good product image can make it stronger.",
+      optional: true,
+    });
+  }
+
+  return issues;
 }
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState("app");
-
-  const [contentMessages, setContentMessages] = useState([
-    {
-      role: "assistant",
-      content:
-        "👋 Welcome to BOMBA AI Content Creator.\n\nTell me what content you want to create.",
-    },
-  ]);
-
-  const [appMessages, setAppMessages] = useState([
-    {
-      role: "assistant",
-      content:
-        "👋 Welcome to BOMBA AI App Builder.\n\nDescribe the app you want to build and I will create an App Plan first.",
-    },
-  ]);
-
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [building, setBuilding] = useState(false);
-
-  const [appRequest, setAppRequest] = useState("");
-  const [appPlan, setAppPlan] = useState("");
-  const [generatedHtml, setGeneratedHtml] = useState("");
-
+  const [project, setProject] = useState(DEFAULT_PROJECT);
+  const [stage, setStage] = useState("describe");
+  const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
-  const messagesEndRef = useRef(null);
+  const [showDoctor, setShowDoctor] = useState(false);
 
-  // Flyer state
-  const [businessName, setBusinessName] = useState("Kingsley Shoes");
-  const [headline, setHeadline] = useState("STEP UP YOUR GAME");
-  const [description, setDescription] = useState(
-    "Premium stylish sneakers designed to elevate your everyday look."
-  );
-  const [price, setPrice] = useState("₦25,000");
-  const [phone, setPhone] = useState("08000000000");
-
-  const messages = activeTab === "app" ? appMessages : contentMessages;
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({
-      behavior: "smooth",
-    });
-  }, [messages, loading]);
-
-  function switchTab(tab) {
-    setActiveTab(tab);
-    setInput("");
-  }
-
-  async function callAI(message, system) {
-    const response = await fetch("/api/chat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        message,
-        system,
-      }),
-    });
-
-    const raw = await response.text();
-
-    let data = {};
-
     try {
-      data = JSON.parse(raw);
+      const savedProject = localStorage.getItem("bomba-universal-project");
+
+      if (savedProject) {
+        const parsed = JSON.parse(savedProject);
+        setProject({
+          ...DEFAULT_PROJECT,
+          ...parsed,
+        });
+        setSaved(true);
+      }
     } catch {
-      throw new Error("The AI server returned an invalid response.");
+      // Ignore invalid local storage data.
     }
+  }, []);
 
-    if (!response.ok) {
-      throw new Error(data.error || "AI request failed.");
-    }
+  const issues = useMemo(
+    () => analyzeProject(project),
+    [project]
+  );
 
-    if (!data.reply) {
-      throw new Error("The AI did not return a response.");
-    }
+  const seriousIssues = issues.filter((issue) => !issue.optional);
 
-    return data.reply;
+  function update(field, value) {
+    setProject((current) => ({
+      ...current,
+      [field]: value,
+    }));
+
+    setSaved(false);
   }
 
-  async function sendMessage(event) {
-    event?.preventDefault();
+  function startBuilding() {
+    setStage("build");
+    setShowDoctor(false);
+  }
 
-    if (!input.trim() || loading || building) return;
+  function openPreview() {
+    setStage("preview");
+    setShowDoctor(false);
+  }
 
-    const request = input.trim();
+  function runDoctor() {
+    setStage("doctor");
+    setShowDoctor(true);
+  }
 
-    setInput("");
-    setLoading(true);
-
-    if (activeTab === "content") {
-      setContentMessages((prev) => [
-        ...prev,
-        {
-          role: "user",
-          content: request,
-        },
-      ]);
-
-      try {
-        const reply = await callAI(request, CONTENT_SYSTEM);
-
-        setContentMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content: reply,
-          },
-        ]);
-      } catch (error) {
-        setContentMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content: "⚠️ " + error.message,
-          },
-        ]);
-      } finally {
-        setLoading(false);
-      }
-
-      return;
-    }
-
-    // APP BUILDER
-    setAppRequest(request);
-    setAppPlan("");
-    setGeneratedHtml("");
-
-    setAppMessages((prev) => [
-      ...prev,
-      {
-        role: "user",
-        content: request,
-      },
-      {
-        role: "assistant",
-        content: "🧠 Creating your App Plan...",
-      },
-    ]);
-
+  function saveProject() {
     try {
-      const planPrompt = [
-        "Create an App Plan ONLY.",
-        "",
-        "NEW APP REQUEST:",
-        request,
-        "",
-        "This is a new request. Do not carry over requirements from older requests.",
-      ].join("\n");
+      localStorage.setItem(
+        "bomba-universal-project",
+        JSON.stringify(project)
+      );
 
-      const reply = await callAI(planPrompt, APP_PLAN_SYSTEM);
-
-      if (!isPlan(reply)) {
-        setAppMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content:
-              "⚠️ I received an incomplete App Plan. Please send the app request again.",
-          },
-        ]);
-        return;
-      }
-
-      setAppPlan(reply);
-
-      setAppMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: reply,
-        },
-      ]);
-    } catch (error) {
-      setAppMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: "⚠️ " + error.message,
-        },
-      ]);
-    } finally {
-      setLoading(false);
+      setSaved(true);
+    } catch {
+      alert("BOMBA AI could not save this project on this device.");
     }
   }
 
-  async function buildApp() {
-    if (!appRequest || !appPlan || building) return;
+  function resetProject() {
+    const confirmed = window.confirm(
+      "Start a new project? Your current unsaved work will be cleared."
+    );
 
-    setBuilding(true);
+    if (!confirmed) return;
 
-    setAppMessages((prev) => [
-      ...prev,
-      {
-        role: "assistant",
-        content: "🔨 Building your app...\n\nPlease wait a moment.",
-      },
-    ]);
+    localStorage.removeItem("bomba-universal-project");
 
-    const buildPrompt = [
-      "BUILD THIS CURRENT APP.",
-      "",
-      "USER'S CURRENT APP REQUEST:",
-      appRequest,
-      "",
-      "CURRENT APP PLAN:",
-      appPlan,
-      "",
-      "Return only the complete standalone HTML document.",
-      "Keep it compact but make the main features functional.",
-      "Do not include markdown.",
+    setProject(DEFAULT_PROJECT);
+    setStage("describe");
+    setSaved(false);
+    setShowDoctor(false);
+  }
+
+  function copyProjectData() {
+    const text = [
+      `Business: ${project.businessName}`,
+      `Headline: ${project.headline}`,
+      `Description: ${project.description}`,
+      `Price: ${project.price}`,
+      `WhatsApp: ${project.whatsapp}`,
     ].join("\n");
 
-    try {
-      let reply = await callAI(buildPrompt, APP_BUILD_SYSTEM);
-      let html = extractHtml(reply);
+    navigator.clipboard?.writeText(text);
 
-      // Automatic second attempt if the first response was incomplete.
-      if (!html) {
-        setAppMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content:
-              "🔄 The first build was incomplete. Trying a smaller version...",
-          },
-        ]);
-
-        const retryPrompt = [
-          "REBUILD THIS APP IN A SMALLER FORMAT.",
-          "",
-          "APP REQUEST:",
-          appRequest,
-          "",
-          "APP PLAN:",
-          appPlan,
-          "",
-          "Return ONLY complete HTML.",
-          "Start with <!DOCTYPE html>.",
-          "End with </html>.",
-          "Use compact CSS and JavaScript.",
-          "Prioritize the main working features.",
-        ].join("\n");
-
-        reply = await callAI(retryPrompt, APP_BUILD_SYSTEM);
-        html = extractHtml(reply);
-      }
-
-      if (!html) {
-        throw new Error(
-          "The AI returned incomplete HTML. Please press Build This App again."
-        );
-      }
-
-      setGeneratedHtml(html);
-
-      setAppMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content:
-            "✅ Your app has been built successfully!\n\nScroll down to see the Live Preview.",
-        },
-      ]);
-    } catch (error) {
-      setAppMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: "⚠️ Build failed: " + error.message,
-        },
-      ]);
-    } finally {
-      setBuilding(false);
-    }
-  }
-
-  async function copyText(text) {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-
-      setTimeout(() => {
-        setCopied(false);
-      }, 2000);
-    } catch {
-      alert("Copy failed. Please select and copy the text manually.");
-    }
-  }
-
-  function downloadApp() {
-    if (!generatedHtml) return;
-
-    const blob = new Blob([generatedHtml], {
-      type: "text/html",
-    });
-
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-
-    link.href = url;
-    link.download = "bomba-ai-app.html";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+    setCopied(true);
 
     setTimeout(() => {
-      URL.revokeObjectURL(url);
-    }, 1000);
+      setCopied(false);
+    }, 1500);
   }
 
-  function startNewApp() {
-    setAppRequest("");
-    setAppPlan("");
-    setGeneratedHtml("");
+  function handleImage(event) {
+    const file = event.target.files?.[0];
 
-    setAppMessages([
-      {
-        role: "assistant",
-        content:
-          "👋 New App Builder session started.\n\nDescribe the app you want to build.",
-      },
-    ]);
+    if (!file) return;
 
-    setInput("");
-  }
-
-  function downloadFlyer() {
-    const popup = window.open("", "_blank");
-
-    if (!popup) {
-      alert("Please allow pop-ups to save your flyer.");
+    if (file.size > 8 * 1024 * 1024) {
+      alert(
+        "This image is larger than 8MB. Choose a smaller image for better phone performance."
+      );
       return;
     }
 
-    const business = escapeHtml(businessName).toUpperCase();
-    const title = escapeHtml(headline).toUpperCase();
-    const text = escapeHtml(description);
-    const amount = escapeHtml(price);
-    const contact = escapeHtml(phone);
+    const reader = new FileReader();
 
-    const flyerHtml = [
-      "<!DOCTYPE html>",
-      "<html>",
-      "<head>",
-      '<meta name="viewport" content="width=device-width, initial-scale=1">',
-      "<title>BOMBA AI Flyer</title>",
-      "<style>",
-      "*{box-sizing:border-box}",
-      "body{margin:0;background:#111;display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:Arial,sans-serif}",
-      ".flyer{width:1080px;height:1080px;padding:76px;position:relative;overflow:hidden;background:radial-gradient(circle at 85% 12%,rgba(255,212,59,.35),transparent 28%),linear-gradient(135deg,#050505,#171717 50%,#000);color:#fff}",
-      ".brand{color:#ffd43b;font-size:42px;font-weight:900;letter-spacing:2px}",
-      ".badge{display:inline-block;margin-top:55px;padding:10px 20px;border-radius:30px;background:#ffd43b;color:#000;font-size:18px;font-weight:900}",
-      "h1{max-width:800px;margin:40px 0 0;font-size:88px;line-height:.92;font-weight:900}",
-      ".description{max-width:650px;margin-top:35px;font-size:27px;line-height:1.3;color:#eee}",
-      ".price-label{margin-top:45px;color:#ddd;font-size:20px;font-weight:bold}",
-      ".price{color:#ffd43b;font-size:76px;font-weight:900}",
-      ".shoe{position:absolute;right:70px;top:430px;font-size:180px;transform:rotate(-10deg)}",
-      ".bottom{position:absolute;left:76px;right:76px;bottom:76px;padding-top:35px;border-top:2px solid rgba(255,255,255,.2);display:flex;justify-content:space-between;align-items:center;font-size:21px}",
-      ".order{color:#ffd43b;font-weight:bold}",
-      ".shop{background:#ffd43b;color:#000;padding:14px 25px;border-radius:30px;font-weight:900}",
-      "@media print{body{background:#fff}.flyer{margin:0}}",
-      "</style>",
-      "</head>",
-      "<body>",
-      '<div class="flyer">',
-      '<div class="brand">' + business + "</div>",
-      '<div class="badge">NEW COLLECTION</div>',
-      "<h1>" + title + "</h1>",
-      '<div class="description">' + text + "</div>",
-      '<div class="price-label">STARTING FROM</div>',
-      '<div class="price">' + amount + "</div>",
-      '<div class="shoe">👟</div>',
-      '<div class="bottom">',
-      "<div><span class=\"order\">ORDER NOW</span><br>WhatsApp: " +
-        contact +
-        "</div>",
-      '<div class="shop">SHOP NOW</div>',
-      "</div>",
-      "</div>",
-      '<script>window.onload=function(){setTimeout(function(){window.print();},400)};<\/script>',
-      "</body>",
-      "</html>",
-    ].join("");
+    reader.onload = () => {
+      update("image", reader.result);
+    };
 
-    popup.document.open();
-    popup.document.write(flyerHtml);
-    popup.document.close();
+    reader.readAsDataURL(file);
   }
 
-  const tabButton = (active) => ({
-    flex: 1,
-    minWidth: 0,
-    minHeight: "52px",
-    padding: "10px 5px",
-    border: "none",
-    background: active ? "#111" : "transparent",
-    color: active ? BRAND.accent : "#888",
-    fontWeight: 800,
-    fontSize: "12px",
-    cursor: "pointer",
-    touchAction: "manipulation",
-  });
+  function autoFix() {
+    let next = { ...project };
+
+    if (!next.price.trim()) {
+      next.price = "₦";
+    }
+
+    if (!next.whatsapp.trim()) {
+      next.whatsapp = "234";
+    }
+
+    if (next.headline.length > 65) {
+      next.headline = next.headline.substring(0, 62) + "...";
+    }
+
+    setProject(next);
+    setSaved(false);
+  }
+
+  function exportFlyer() {
+    const template = TEMPLATES[project.template];
+
+    const flyerWindow = window.open("", "_blank");
+
+    if (!flyerWindow) {
+      alert("Please allow pop-ups in your browser to export the flyer.");
+      return;
+    }
+
+    const imageHTML = project.image
+      ? `<img src="${project.image}" class="product-image" />`
+      : `<div class="image-placeholder">YOUR<br/>PRODUCT<br/>PHOTO</div>`;
+
+    flyerWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>${project.businessName || "BOMBA AI Flyer"}</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          * {
+            box-sizing: border-box;
+          }
+
+          html,
+          body {
+            margin: 0;
+            padding: 0;
+            background: #111;
+          }
+
+          body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: Arial, Helvetica, sans-serif;
+          }
+
+          .flyer {
+            width: min(92vw, 1080px);
+            aspect-ratio: 1 / 1;
+            background: ${template.background};
+            color: white;
+            position: relative;
+            overflow: hidden;
+            padding: 7%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+          }
+
+          .gold {
+            color: ${template.accent};
+          }
+
+          .business {
+            font-size: clamp(24px, 4vw, 55px);
+            font-weight: 900;
+            letter-spacing: 1px;
+          }
+
+          .label {
+            display: inline-block;
+            margin-top: 18px;
+            padding: 10px 18px;
+            background: ${template.accent};
+            color: #111;
+            font-weight: 900;
+            border-radius: 30px;
+            font-size: clamp(14px, 2vw, 24px);
+          }
+
+          .headline {
+            font-size: clamp(38px, 7vw, 90px);
+            line-height: .95;
+            font-weight: 950;
+            margin: 0;
+            max-width: 90%;
+          }
+
+          .description {
+            font-size: clamp(18px, 3vw, 35px);
+            line-height: 1.25;
+            max-width: 80%;
+            color: #eeeeee;
+          }
+
+          .product {
+            position: absolute;
+            right: 5%;
+            top: 25%;
+            width: 42%;
+            height: 42%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+
+          .product-image {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            filter: drop-shadow(0 20px 25px rgba(0,0,0,.45));
+          }
+
+          .image-placeholder {
+            width: 100%;
+            height: 100%;
+            border: 2px dashed rgba(255,255,255,.3);
+            border-radius: 25px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: rgba(255,255,255,.35);
+            font-size: 25px;
+            font-weight: 800;
+          }
+
+          .bottom {
+            display: flex;
+            justify-content: space-between;
+            align-items: end;
+            gap: 20px;
+          }
+
+          .price {
+            font-size: clamp(30px, 5vw, 65px);
+            font-weight: 950;
+            color: ${template.accent};
+          }
+
+          .contact {
+            font-size: clamp(15px, 2.5vw, 28px);
+            font-weight: 800;
+            text-align: right;
+          }
+
+          @media print {
+            body {
+              background: white;
+            }
+
+            .flyer {
+              width: 100vw;
+              height: 100vh;
+            }
+          }
+        </style>
+      </head>
+
+      <body>
+        <div class="flyer">
+          <div>
+            <div class="business">${escapeHTML(project.businessName || "YOUR BUSINESS")}</div>
+            <div class="label">${template.label}</div>
+          </div>
+
+          <div>
+            <h1 class="headline">${escapeHTML(project.headline || "YOUR HEADLINE")}</h1>
+            <p class="description">${escapeHTML(project.description || "Add your product description here.")}</p>
+          </div>
+
+          <div class="product">
+            ${imageHTML}
+          </div>
+
+          <div class="bottom">
+            <div class="price">${escapeHTML(project.price || "₦0")}</div>
+            <div class="contact">
+              WhatsApp<br/>
+              ${escapeHTML(project.whatsapp || "Add your number")}
+            </div>
+          </div>
+        </div>
+
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+            }, 500);
+          };
+        </script>
+      </body>
+      </html>
+    `);
+
+    flyerWindow.document.close();
+  }
+
+  return (
+    <main style={styles.page}>
+      <header style={styles.header}>
+        <div>
+          <div style={styles.logoRow}>
+            <div style={styles.logo}>TB</div>
+
+            <div>
+              <div style={styles.brand}>{BRAND.name}</div>
+              <div style={styles.tagline}>{BRAND.tagline}</div>
+            </div>
+          </div>
+        </div>
+
+        <button style={styles.newButton} onClick={resetProject}>
+          + New
+        </button>
+      </header>
+
+      <section style={styles.hero}>
+        <div style={styles.eyebrow}>UNIVERSAL CREATION PLATFORM</div>
+
+        <h1 style={styles.heroTitle}>
+          Describe it.
+          <br />
+          <span style={{ color: BRAND.accent }}>BOMBA builds it.</span>
+        </h1>
+
+        <p style={styles.heroText}>
+          Create professional flyers, websites, apps, dashboards,
+          business tools and more from one intelligent builder.
+        </p>
+      </section>
+
+      <nav style={styles.steps}>
+        {[
+          ["describe", "1", "Describe"],
+          ["build", "2", "Build"],
+          ["preview", "3", "Preview"],
+          ["doctor", "4", "AI Doctor"],
+        ].map(([key, number, label]) => (
+          <button
+            key={key}
+            onClick={() => {
+              if (key === "describe") setStage("describe");
+              if (key === "build") setStage("build");
+              if (key === "preview") setStage("preview");
+              if (key === "doctor") runDoctor();
+            }}
+            style={{
+              ...styles.step,
+              ...(stage === key ? styles.activeStep : {}),
+            }}
+          >
+            <span style={styles.stepNumber}>{number}</span>
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      {stage === "describe" && (
+        <section style={styles.card}>
+          <div style={styles.sectionTitle}>What do you want to create?</div>
+
+          <p style={styles.muted}>
+            Start with a creation request. Universal Builder will eventually
+            use the same flow for apps, websites, dashboards and content.
+          </p>
+
+          <div style={styles.creationGrid}>
+            <button
+              style={styles.creationCardActive}
+              onClick={() => update("type", "flyer")}
+            >
+              <span style={styles.creationIcon}>🎨</span>
+              <strong>Professional Flyer</strong>
+              <small>Marketing • Product • Sales</small>
+            </button>
+
+            <button style={styles.creationCard}>
+              <span style={styles.creationIcon}>🌐</span>
+              <strong>Website</strong>
+              <small>Coming in Universal Builder</small>
+            </button>
+
+            <button style={styles.creationCard}>
+              <span style={styles.creationIcon}>📱</span>
+              <strong>Web App</strong>
+              <small>Coming in Universal Builder</small>
+            </button>
+
+            <button style={styles.creationCard}>
+              <span style={styles.creationIcon}>📊</span>
+              <strong>Dashboard</strong>
+              <small>Coming in Universal Builder</small>
+            </button>
+          </div>
+
+          <div style={styles.requestBox}>
+            <label style={styles.label}>Describe your creation</label>
+
+            <textarea
+              placeholder="Example: Create a premium sneaker promotion flyer for my business..."
+              style={styles.textarea}
+              value={project.headline}
+              onChange={(e) => update("headline", e.target.value)}
+            />
+
+            <button style={styles.primaryButton} onClick={startBuilding}>
+              Start Building →
+            </button>
+          </div>
+        </section>
+      )}
+
+      {stage === "build" && (
+        <section style={styles.workspace}>
+          <div style={styles.editorCard}>
+            <div style={styles.sectionHeader}>
+              <div>
+                <div style={styles.sectionTitle}>Build your flyer</div>
+                <div style={styles.muted}>
+                  Your changes appear instantly in the preview.
+                </div>
+              </div>
+
+              <span style={styles.badge}>FLYER</span>
+            </div>
+
+            <div style={styles.field}>
+              <label style={styles.label}>Business Name</label>
+              <input
+                style={styles.input}
+                placeholder="TAP BOMBER"
+                value={project.businessName}
+                onChange={(e) =>
+                  update("businessName", e.target.value)
+                }
+              />
+            </div>
+
+            <div style={styles.field}>
+              <label style={styles.label}>Headline</label>
+              <input
+                style={styles.input}
+                placeholder="NEW SNEAKER DROP"
+                value={project.headline}
+                onChange={(e) => update("headline", e.target.value)}
+              />
+            </div>
+
+            <div style={styles.field}>
+              <label style={styles.label}>Description</label>
+              <textarea
+                style={styles.textareaSmall}
+                placeholder="Premium sneakers available now."
+                value={project.description}
+                onChange={(e) =>
+                  update("description", e.target.value)
+                }
+              />
+            </div>
+
+            <div style={styles.twoColumns}>
+              <div style={styles.field}>
+                <label style={styles.label}>Price</label>
+                <input
+                  style={styles.input}
+                  placeholder="₦25,000"
+                  value={project.price}
+                  onChange={(e) => update("price", e.target.value)}
+                />
+              </div>
+
+              <div style={styles.field}>
+                <label style={styles.label}>WhatsApp</label>
+                <input
+                  style={styles.input}
+                  placeholder="2348012345678"
+                  value={project.whatsapp}
+                  onChange={(e) =>
+                    update("whatsapp", e.target.value)
+                  }
+                />
+              </div>
+            </div>
+
+            <div style={styles.field}>
+              <label style={styles.label}>Template</label>
+
+              <div style={styles.templateGrid}>
+                {Object.entries(TEMPLATES).map(([key, template]) => (
+                  <button
+                    key={key}
+                    onClick={() => update("template", key)}
+                    style={{
+                      ...styles.templateButton,
+                      ...(project.template === key
+                        ? styles.selectedTemplate
+                        : {}),
+                    }}
+                  >
+                    {template.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={styles.field}>
+              <label style={styles.label}>Product Photo</label>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImage}
+                style={{ display: "none" }}
+              />
+
+              <button
+                style={styles.secondaryButton}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {project.image ? "Change Photo" : "Upload Photo"}
+              </button>
+            </div>
+
+            <div style={styles.actionRow}>
+              <button style={styles.secondaryButton} onClick={saveProject}>
+                {saved ? "✓ Saved" : "Save Draft"}
+              </button>
+
+              <button style={styles.primaryButton} onClick={openPreview}>
+                Preview →
+              </button>
+            </div>
+          </div>
+
+          <FlyerPreview project={project} />
+        </section>
+      )}
+
+      {stage === "preview" && (
+        <section>
+          <div style={styles.previewHeader}>
+            <div>
+              <div style={styles.sectionTitle}>Preview</div>
+              <div style={styles.muted}>
+                Check your design before exporting.
+              </div>
+            </div>
+
+            <div style={styles.actionRow}>
+              <button style={styles.secondaryButton} onClick={() => setStage("build")}>
+                ← Edit
+              </button>
+
+              <button style={styles.primaryButton} onClick={runDoctor}>
+                🩺 AI Doctor
+              </button>
+            </div>
+          </div>
+
+          <FlyerPreview project={project} large />
+
+          <div style={styles.exportBar}>
+            <button style={styles.secondaryButton} onClick={saveProject}>
+              💾 Save
+            </button>
+
+            <button style={styles.secondaryButton} onClick={copyProjectData}>
+              {copied ? "✓ Copied" : "Copy Details"}
+            </button>
+
+            <button style={styles.primaryButton} onClick={exportFlyer}>
+              Export Flyer →
+            </button>
+          </div>
+        </section>
+      )}
+
+      {stage === "doctor" && (
+        <section>
+          <div style={styles.doctorHeader}>
+            <div>
+              <div style={styles.sectionTitle}>🩺 BOMBA AI Doctor</div>
+
+              <p style={styles.muted}>
+                Checking your creation for common problems before export.
+              </p>
+            </div>
+
+            <div
+              style={{
+                ...styles.healthBadge,
+                borderColor:
+                  seriousIssues.length === 0
+                    ? "#35d07f"
+                    : "#ff5d5d",
+              }}
+            >
+              {seriousIssues.length === 0
+                ? "✓ READY"
+                : `${seriousIssues.length} ISSUE${
+                    seriousIssues.length === 1 ? "" : "S"
+                  }`}
+            </div>
+          </div>
+
+          <div style={styles.doctorCard}>
+            {issues.length === 0 ? (
+              <div style={styles.successBox}>
+                <div style={styles.successIcon}>✓</div>
+
+                <h2>Creation looks healthy</h2>
+
+                <p>
+                  No major problems were detected. You can continue to
+                  preview, save or export your flyer.
+                </p>
+              </div>
+            ) : (
+              <>
+                {issues.map((issue, index) => (
+                  <div
+                    key={`${issue.title}-${index}`}
+                    style={{
+                      ...styles.issue,
+                      ...(issue.optional
+                        ? styles.optionalIssue
+                        : {}),
+                    }}
+                  >
+                    <div style={styles.issueIcon}>
+                      {issue.optional ? "ℹ" : "!"}
+                    </div>
+
+                    <div>
+                      <strong>{issue.title}</strong>
+                      <p>{issue.message}</p>
+                    </div>
+                  </div>
+                ))}
+
+                <button style={styles.fixButton} onClick={autoFix}>
+                  🔧 Fix What BOMBA Can Fix
+                </button>
+              </>
+            )}
+          </div>
+
+          <FlyerPreview project={project} />
+
+          <div style={styles.actionRowCenter}>
+            <button
+              style={styles.secondaryButton}
+              onClick={() => setStage("build")}
+            >
+              ← Modify
+            </button>
+
+            <button style={styles.primaryButton} onClick={exportFlyer}>
+              Export →
+            </button>
+          </div>
+        </section>
+      )}
+    </main>
+  );
+}
+
+function FlyerPreview({ project, large = false }) {
+  const template = TEMPLATES[project.template] || TEMPLATES.premium;
 
   return (
     <div
       style={{
-        minHeight: "100vh",
-        background: "#050505",
-        color: "#fff",
-        fontFamily: "system-ui, -apple-system, sans-serif",
+        ...styles.previewOuter,
+        ...(large ? styles.largePreviewOuter : {}),
       }}
     >
-      {/* HEADER */}
-      <header
+      <div
         style={{
-          background: BRAND.accent,
-          color: "#000",
-          padding: "15px 12px",
-          textAlign: "center",
+          ...styles.flyer,
+          background: template.background,
         }}
       >
-        <div
-          style={{
-            fontSize: "22px",
-            fontWeight: 950,
-          }}
-        >
-          🤖 BOMBA AI
-        </div>
-
-        <div
-          style={{
-            marginTop: "3px",
-            fontSize: "12px",
-            fontWeight: 600,
-          }}
-        >
-          {BRAND.tagline}
-        </div>
-      </header>
-
-      {/* TABS */}
-      <nav
-        style={{
-          display: "flex",
-          borderBottom: "1px solid #222",
-          background: "#090909",
-        }}
-      >
-        <button
-          type="button"
-          onClick={() => switchTab("content")}
-          style={tabButton(activeTab === "content")}
-        >
-          💬 Content Creator
-        </button>
-
-        <button
-          type="button"
-          onClick={() => switchTab("app")}
-          style={tabButton(activeTab === "app")}
-        >
-          🚀 App Builder
-        </button>
-
-        <button
-          type="button"
-          onClick={() => switchTab("flyer")}
-          style={tabButton(activeTab === "flyer")}
-        >
-          🎨 Flyer
-        </button>
-      </nav>
-
-      {/* CONTENT CREATOR / APP BUILDER */}
-      {activeTab !== "flyer" && (
-        <>
-          <main
-            style={{
-              maxWidth: "850px",
-              margin: "0 auto",
-              padding: "18px 14px 170px",
-            }}
-          >
-            {messages.map((message, index) => (
-              <div
-                key={index}
-                style={{
-                  display: "flex",
-                  justifyContent:
-                    message.role === "user"
-                      ? "flex-end"
-                      : "flex-start",
-                  marginBottom: "12px",
-                }}
-              >
-                <div
-                  style={{
-                    maxWidth: "92%",
-                    background:
-                      message.role === "user" ? BRAND.accent : "#171717",
-                    color:
-                      message.role === "user" ? "#000" : "#fff",
-                    padding: "13px 15px",
-                    borderRadius: "16px",
-                    whiteSpace: "pre-wrap",
-                    lineHeight: 1.5,
-                    fontSize: "15px",
-                  }}
-                >
-                  {message.content}
-
-                  {message.role === "assistant" &&
-                    message.content.length > 100 && (
-                      <button
-                        type="button"
-                        onClick={() => copyText(message.content)}
-                        style={{
-                          display: "block",
-                          marginTop: "10px",
-                          padding: "6px 10px",
-                          borderRadius: "8px",
-                          border: "1px solid #444",
-                          background: "#222",
-                          color: "#fff",
-                          fontSize: "11px",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Copy
-                      </button>
-                    )}
-                </div>
-              </div>
-            ))}
-
-            {loading && (
-              <div
-                style={{
-                  display: "inline-block",
-                  background: "#171717",
-                  color: "#aaa",
-                  padding: "12px 15px",
-                  borderRadius: "16px",
-                }}
-              >
-                🧠 Thinking...
-              </div>
-            )}
-
-            <div ref={messagesEndRef} />
-
-            {/* BUILD BUTTON */}
-            {activeTab === "app" &&
-              appPlan &&
-              !generatedHtml &&
-              !building &&
-              !loading && (
-                <div
-                  style={{
-                    marginTop: "18px",
-                    padding: "16px",
-                    background: "#101010",
-                    border: "1px solid #292929",
-                    borderRadius: "14px",
-                  }}
-                >
-                  <div
-                    style={{
-                      color: BRAND.accent,
-                      fontWeight: 800,
-                      marginBottom: "10px",
-                    }}
-                  >
-                    🚀 Your App Plan is ready
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={buildApp}
-                    style={{
-                      width: "100%",
-                      padding: "14px",
-                      border: "none",
-                      borderRadius: "11px",
-                      background: BRAND.accent,
-                      color: "#000",
-                      fontWeight: 900,
-                      fontSize: "15px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    🔨 Build This App 🚀
-                  </button>
-                </div>
-              )}
-
-            {/* LIVE PREVIEW */}
-            {generatedHtml && (
-              <section
-                style={{
-                  marginTop: "22px",
-                  padding: "14px",
-                  background: "#101010",
-                  border: "1px solid #292929",
-                  borderRadius: "14px",
-                }}
-              >
-                <h2
-                  style={{
-                    margin: "0 0 12px",
-                    color: BRAND.accent,
-                    fontSize: "20px",
-                  }}
-                >
-                  🖥️ Live Preview
-                </h2>
-
-                <iframe
-                  title="BOMBA AI Generated App"
-                  srcDoc={generatedHtml}
-                  sandbox="allow-scripts allow-forms"
-                  style={{
-                    width: "100%",
-                    height: "600px",
-                    border: "1px solid #333",
-                    borderRadius: "10px",
-                    background: "#fff",
-                  }}
-                />
-
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "8px",
-                    marginTop: "12px",
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => copyText(generatedHtml)}
-                    style={{
-                      flex: 1,
-                      padding: "12px 8px",
-                      border: "none",
-                      borderRadius: "10px",
-                      background: "#fff",
-                      color: "#000",
-                      fontWeight: 800,
-                    }}
-                  >
-                    {copied ? "✅ Copied" : "📋 Copy HTML"}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={downloadApp}
-                    style={{
-                      flex: 1,
-                      padding: "12px 8px",
-                      border: "none",
-                      borderRadius: "10px",
-                      background: BRAND.accent,
-                      color: "#000",
-                      fontWeight: 800,
-                    }}
-                  >
-                    📥 Download
-                  </button>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={startNewApp}
-                  style={{
-                    width: "100%",
-                    marginTop: "9px",
-                    padding: "11px",
-                    border: "1px solid #444",
-                    borderRadius: "10px",
-                    background: "#181818",
-                    color: "#fff",
-                    fontWeight: 700,
-                  }}
-                >
-                  ➕ Build Another App
-                </button>
-              </section>
-            )}
-          </main>
-
-          {/* CHAT INPUT */}
-          <form
-            onSubmit={sendMessage}
-            style={{
-              position: "fixed",
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: "#090909",
-              borderTop: "1px solid #252525",
-              padding: "10px 12px",
-              zIndex: 20,
-            }}
-          >
-            <div
-              style={{
-                maxWidth: "850px",
-                margin: "0 auto",
-                display: "flex",
-                gap: "8px",
-                alignItems: "stretch",
-              }}
-            >
-              <textarea
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (
-                    event.key === "Enter" &&
-                    !event.shiftKey
-                  ) {
-                    event.preventDefault();
-                    event.currentTarget.form?.requestSubmit();
-                  }
-                }}
-                placeholder={
-                  activeTab === "app"
-                    ? "Describe the app you want to build..."
-                    : "Tell BOMBA AI what content you need..."
-                }
-                disabled={loading || building}
-                rows={2}
-                style={{
-                  ...INPUT_STYLE,
-                  resize: "none",
-                  minHeight: "50px",
-                }}
-              />
-
-              <button
-                type="submit"
-                disabled={
-                  loading ||
-                  building ||
-                  !input.trim()
-                }
-                style={{
-                  width: "80px",
-                  border: "none",
-                  borderRadius: "10px",
-                  background: BRAND.accent,
-                  color: "#000",
-                  fontWeight: 900,
-                  fontSize: "14px",
-                  opacity:
-                    loading ||
-                    building ||
-                    !input.trim()
-                      ? 0.5
-                      : 1,
-                }}
-              >
-                Send
-              </button>
-            </div>
-          </form>
-        </>
-      )}
-
-      {/* FLYER GENERATOR */}
-      {activeTab === "flyer" && (
-        <main
-          style={{
-            maxWidth: "700px",
-            margin: "0 auto",
-            padding: "20px 14px 40px",
-          }}
-        >
-          <h2
-            style={{
-              marginTop: 0,
-              color: BRAND.accent,
-            }}
-          >
-            🎨 Flyer Generator
-          </h2>
-
-          <p
-            style={{
-              color: "#aaa",
-              fontSize: "14px",
-            }}
-          >
-            Create a square promotional flyer for your business.
-          </p>
-
-          <label>Business Name</label>
-          <input
-            value={businessName}
-            onChange={(e) => setBusinessName(e.target.value)}
-            style={INPUT_STYLE}
-          />
-
-          <label
-            style={{
-              display: "block",
-              marginTop: "14px",
-            }}
-          >
-            Main Headline
-          </label>
-          <input
-            value={headline}
-            onChange={(e) => setHeadline(e.target.value)}
-            style={INPUT_STYLE}
-          />
-
-          <label
-            style={{
-              display: "block",
-              marginTop: "14px",
-            }}
-          >
-            Description
-          </label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={3}
-            style={{
-              ...INPUT_STYLE,
-              resize: "vertical",
-            }}
-          />
-
-          <label
-            style={{
-              display: "block",
-              marginTop: "14px",
-            }}
-          >
-            Price
-          </label>
-          <input
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            style={INPUT_STYLE}
-          />
-
-          <label
-            style={{
-              display: "block",
-              marginTop: "14px",
-            }}
-          >
-            WhatsApp / Phone
-          </label>
-          <input
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            style={INPUT_STYLE}
-          />
-
-          <h3
-            style={{
-              color: BRAND.accent,
-              textAlign: "center",
-              marginTop: "25px",
-            }}
-          >
-            Live Preview
-          </h3>
+        <div style={styles.flyerTop}>
+          <div style={styles.flyerBusiness}>
+            {project.businessName || "YOUR BUSINESS"}
+          </div>
 
           <div
             style={{
-              width: "100%",
-              maxWidth: "420px",
-              aspectRatio: "1 / 1",
-              margin: "0 auto",
-              padding: "7%",
-              boxSizing: "border-box",
-              position: "relative",
-              overflow: "hidden",
-              borderRadius: "8px",
-              background:
-                "radial-gradient(circle at 85% 12%, rgba(255,212,59,.35), transparent 28%), linear-gradient(135deg,#050505,#171717 50%,#000)",
-              color: "#fff",
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "space-between",
+              ...styles.flyerLabel,
+              color: "#111",
+              background: template.accent,
             }}
           >
-            <div>
-              <div
-                style={{
-                  color: BRAND.accent,
-                  fontSize: "clamp(18px,4vw,28px)",
-                  fontWeight: 900,
-                  letterSpacing: "1.5px",
-                }}
-              >
-                {businessName.toUpperCase() ||
-                  "YOUR BUSINESS"}
-              </div>
+            {template.label}
+          </div>
+        </div>
 
-              <div
-                style={{
-                  display: "inline-block",
-                  marginTop: "12px",
-                  padding: "6px 12px",
-                  borderRadius: "20px",
-                  background: BRAND.accent,
-                  color: "#000",
-                  fontSize: "12px",
-                  fontWeight: 900,
-                }}
-              >
-                NEW COLLECTION
-              </div>
+        <div style={styles.flyerMain}>
+          <div style={styles.flyerCopy}>
+            <h2>{project.headline || "YOUR HEADLINE"}</h2>
 
-              <h2
-                style={{
-                  margin: "14px 0 0",
-                  fontSize: "clamp(28px,6vw,42px)",
-                  lineHeight: 0.95,
-                  fontWeight: 900,
-                  textTransform: "uppercase",
-                }}
-              >
-                {headline || "YOUR HEADLINE"}
-              </h2>
-
-              <p
-                style={{
-                  marginTop: "12px",
-                  fontSize: "14px",
-                  lineHeight: 1.4,
-                  color: "#eee",
-                  maxWidth: "75%",
-                }}
-              >
-                {description}
-              </p>
-
-              <div style={{ marginTop: "18px" }}>
-                <div
-                  style={{
-                    fontSize: "12px",
-                    color: "#ccc",
-                    fontWeight: 600,
-                  }}
-                >
-                  STARTING FROM
-                </div>
-
-                <div
-                  style={{
-                    color: BRAND.accent,
-                    fontSize: "clamp(26px,5vw,36px)",
-                    fontWeight: 900,
-                  }}
-                >
-                  {price}
-                </div>
-              </div>
-            </div>
+            <p>
+              {project.description ||
+                "Your product or service description goes here."}
+            </p>
 
             <div
               style={{
-                borderTop:
-                  "2px solid rgba(255,255,255,.2)",
-                paddingTop: "12px",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                fontSize: "13px",
+                ...styles.flyerPrice,
+                color: template.accent,
               }}
             >
-              <div>
-                <strong
-                  style={{
-                    color: BRAND.accent,
-                  }}
-                >
-                  ORDER NOW
-                </strong>
-                <br />
-                WhatsApp: {phone}
-              </div>
-
-              <div
-                style={{
-                  background: BRAND.accent,
-                  color: "#000",
-                  padding: "8px 14px",
-                  borderRadius: "20px",
-                  fontWeight: 900,
-                  fontSize: "12px",
-                }}
-              >
-                SHOP NOW
-              </div>
+              {project.price || "₦0"}
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={downloadFlyer}
-            style={{
-              display: "block",
-              width: "100%",
-              maxWidth: "420px",
-              margin: "20px auto 0",
-              padding: "14px",
-              border: "none",
-              borderRadius: "12px",
-              background: "#fff",
-              color: "#000",
-              fontWeight: 900,
-              fontSize: "16px",
-            }}
-          >
-            📥 Save / Print Flyer
-          </button>
-        </main>
-      )}
+          <div style={styles.flyerImageBox}>
+            {project.image ? (
+              <img
+                src={project.image}
+                alt="Product"
+                style={styles.flyerImage}
+              />
+            ) : (
+              <div style={styles.photoPlaceholder}>
+                <span>＋</span>
+                <small>PRODUCT PHOTO</small>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div style={styles.flyerBottom}>
+          <span>WhatsApp</span>
+
+          <strong>
+            {project.whatsapp || "Add WhatsApp number"}
+          </strong>
+        </div>
+      </div>
     </div>
   );
 }
+
+function escapeHTML(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+const styles = {
+  page: {
+    minHeight: "100vh",
+    background: "#050505",
+    color: "#fff",
+    padding: "20px",
+    fontFamily:
+      "Arial, Helvetica, sans-serif",
+  },
+
+  header: {
+    maxWidth: "1200px",
+    margin: "0 auto",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  logoRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+  },
+
+  logo: {
+    width: "45px",
+    height: "45px",
+    borderRadius: "13px",
+    background: "#FFD43B",
+    color: "#050505",
+    display: "grid",
+    placeItems: "center",
+    fontWeight: 1000,
+    fontSize: "19px",
+  },
+
+  brand: {
+    fontWeight: 900,
+    fontSize: "18px",
+  },
+
+  tagline: {
+    color: "#888",
+    fontSize: "11px",
+    marginTop: "2px",
+  },
+
+  newButton: {
+    background: "#151515",
+    border: "1px solid #303030",
+    color: "#fff",
+    padding: "10px 15px",
+    borderRadius: "12px",
+    cursor: "pointer",
+  },
+
+  hero: {
+    maxWidth: "900px",
+    margin: "60px auto 35px",
+    textAlign: "center",
+  },
+
+  eyebrow: {
+    color: "#FFD43B",
+    fontSize: "11px",
+    fontWeight: 900,
+    letterSpacing: "2px",
+    marginBottom: "15px",
+  },
+
+  heroTitle: {
+    fontSize: "clamp(38px, 8vw, 76px)",
+    lineHeight: ".95",
+    margin: 0,
+    fontWeight: 950,
+  },
+
+  heroText: {
+    maxWidth: "650px",
+    margin: "22px auto 0",
+    color: "#999",
+    lineHeight: 1.6,
+  },
+
+  steps: {
+    maxWidth: "1000px",
+    margin: "0 auto 25px",
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(4, minmax(0, 1fr))",
+    gap: "8px",
+  },
+
+  step: {
+    background: "#101010",
+    color: "#777",
+    border: "1px solid #202020",
+    borderRadius: "12px",
+    padding: "12px 8px",
+    cursor: "pointer",
+    fontSize: "12px",
+  },
+
+  activeStep: {
+    color: "#fff",
+    borderColor: "#FFD43B",
+  },
+
+  stepNumber: {
+    color: "#FFD43B",
+    fontWeight: 900,
+    marginRight: "5px",
+  },
+
+  card: {
+    maxWidth: "1000px",
+    margin: "0 auto",
+    background: "#0d0d0d",
+    border: "1px solid #202020",
+    borderRadius: "20px",
+    padding: "25px",
+  },
+
+  sectionTitle: {
+    fontSize: "23px",
+    fontWeight: 900,
+  },
+
+  muted: {
+    color: "#888",
+    lineHeight: 1.5,
+    fontSize: "14px",
+  },
+
+  creationGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: "12px",
+    marginTop: "25px",
+  },
+
+  creationCard: {
+    minHeight: "135px",
+    background: "#111",
+    border: "1px solid #252525",
+    borderRadius: "16px",
+    color: "#777",
+    padding: "18px",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+
+  creationCardActive: {
+    minHeight: "135px",
+    background: "#161616",
+    border: "1px solid #FFD43B",
+    borderRadius: "16px",
+    color: "#fff",
+    padding: "18px",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+
+  creationIcon: {
+    display: "block",
+    fontSize: "30px",
+    marginBottom: "12px",
+  },
+
+  requestBox: {
+    marginTop: "25px",
+  },
+
+  label: {
+    display: "block",
+    color: "#aaa",
+    fontSize: "12px",
+    fontWeight: 800,
+    marginBottom: "8px",
+  },
+
+  textarea: {
+    width: "100%",
+    minHeight: "120px",
+    resize: "vertical",
+    background: "#080808",
+    color: "#fff",
+    border: "1px solid #292929",
+    borderRadius: "13px",
+    padding: "14px",
+    outline: "none",
+    fontSize: "15px",
+    boxSizing: "border-box",
+  },
+
+  workspace: {
+    maxWidth: "1200px",
+    margin: "0 auto",
+    display: "grid",
+    gridTemplateColumns:
+      "minmax(280px, 430px) minmax(300px, 1fr)",
+    gap: "20px",
+  },
+
+  editorCard: {
+    background: "#0d0d0d",
+    border: "1px solid #202020",
+    borderRadius: "20px",
+    padding: "22px",
+  },
+
+  sectionHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "15px",
+    marginBottom: "20px",
+  },
+
+  badge: {
+    height: "fit-content",
+    padding: "6px 9px",
+    borderRadius: "8px",
+    background: "#FFD43B",
+    color: "#111",
+    fontSize: "10px",
+    fontWeight: 900,
+  },
+
+  field: {
+    marginBottom: "17px",
+  },
+
+  input: {
+    width: "100%",
+    background: "#080808",
+    color: "#fff",
+    border: "1px solid #292929",
+    borderRadius: "11px",
+    padding: "13px",
+    outline: "none",
+    boxSizing: "border-box",
+  },
+
+  textareaSmall: {
+    width: "100%",
+    minHeight: "80px",
+    background: "#080808",
+    color: "#fff",
+    border: "1px solid #292929",
+    borderRadius: "11px",
+    padding: "13px",
+    resize: "vertical",
+    outline: "none",
+    boxSizing: "border-box",
+  },
+
+  twoColumns: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(2, minmax(0, 1fr))",
+    gap: "10px",
+  },
+
+  templateGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(3, minmax(0, 1fr))",
+    gap: "8px",
+  },
+
+  templateButton: {
+    background: "#111",
+    border: "1px solid #282828",
+    color: "#aaa",
+    padding: "11px 5px",
+    borderRadius: "9px",
+    cursor: "pointer",
+  },
+
+  selectedTemplate: {
+    borderColor: "#FFD43B",
+    color: "#FFD43B",
+  },
+
+  primaryButton: {
+    background: "#FFD43B",
+    color: "#080808",
+    border: "none",
+    borderRadius: "11px",
+    padding: "12px 17px",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  secondaryButton: {
+    background: "#151515",
+    color: "#fff",
+    border: "1px solid #303030",
+    borderRadius: "11px",
+    padding: "12px 15px",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+
+  actionRow: {
+    display: "flex",
+    gap: "9px",
+    flexWrap: "wrap",
+    marginTop: "20px",
+  },
+
+  previewOuter: {
+    width: "100%",
+    maxWidth: "560px",
+    margin: "0 auto",
+    aspectRatio: "1 / 1",
+    borderRadius: "20px",
+    overflow: "hidden",
+    boxShadow: "0 20px 60px rgba(0,0,0,.35)",
+  },
+
+  largePreviewOuter: {
+    maxWidth: "700px",
+    marginTop: "25px",
+  },
+
+  flyer: {
+    width: "100%",
+    height: "100%",
+    padding: "7%",
+    position: "relative",
+    overflow: "hidden",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+    boxSizing: "border-box",
+  },
+
+  flyerTop: {
+    position: "relative",
+    zIndex: 2,
+  },
+
+  flyerBusiness: {
+    fontWeight: 950,
+    fontSize: "clamp(17px, 3vw, 29px)",
+    letterSpacing: ".5px",
+  },
+
+  flyerLabel: {
+    display: "inline-block",
+    padding: "7px 12px",
+    borderRadius: "20px",
+    marginTop: "10px",
+    fontWeight: 950,
+    fontSize: "clamp(9px, 1.5vw, 15px)",
+  },
+
+  flyerMain: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    position: "relative",
+    zIndex: 2,
+  },
+
+  flyerCopy: {
+    width: "58%",
+  },
+
+  flyerCopyH2: {},
+
+  flyerImageBox: {
+    width: "42%",
+    aspectRatio: "1 / 1",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  flyerImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+    filter: "drop-shadow(0 15px 15px rgba(0,0,0,.4))",
+  },
+
+  photoPlaceholder: {
+    width: "100%",
+    aspectRatio: "1 / 1",
+    border: "1px dashed rgba(255,255,255,.25)",
+    borderRadius: "15px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "rgba(255,255,255,.35)",
+  },
+
+  flyerPrice: {
+    fontWeight: 950,
+    fontSize: "clamp(22px, 4vw, 42px)",
+    marginTop: "15px",
+  },
+
+  flyerBottom: {
+    position: "relative",
+    zIndex: 2,
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "10px",
+    color: "#aaa",
+    fontSize: "clamp(9px, 1.6vw, 14px)",
+  },
+
+  previewHeader: {
+    maxWidth: "1000px",
+    margin: "0 auto",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "15px",
+    flexWrap: "wrap",
+  },
+
+  exportBar: {
+    maxWidth: "700px",
+    margin: "20px auto",
+    display: "flex",
+    justifyContent: "center",
+    gap: "9px",
+    flexWrap: "wrap",
+  },
+
+  doctorHeader: {
+    maxWidth: "900px",
+    margin: "0 auto",
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "20px",
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+
+  healthBadge: {
+    border: "1px solid",
+    borderRadius: "20px",
+    padding: "8px 12px",
+    fontSize: "11px",
+    fontWeight: 900,
+  },
+
+  doctorCard: {
+    maxWidth: "900px",
+    margin: "25px auto",
+    background: "#0d0d0d",
+    border: "1px solid #202020",
+    borderRadius: "18px",
+    padding: "18px",
+  },
+
+  issue: {
+    display: "flex",
+    gap: "12px",
+    padding: "15px 0",
+    borderBottom: "1px solid #222",
+  },
+
+  optionalIssue: {
+    opacity: 0.7,
+  },
+
+  issueIcon: {
+    width: "28px",
+    height: "28px",
+    borderRadius: "50%",
+    background: "#ff5d5d",
+    color: "#fff",
+    display: "grid",
+    placeItems: "center",
+    flexShrink: 0,
+    fontWeight: 900,
+  },
+
+  issueP: {},
+
+  fixButton: {
+    marginTop: "18px",
+    background: "#FFD43B",
+    color: "#111",
+    border: "none",
+    borderRadius: "11px",
+    padding: "13px 17px",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  successBox: {
+    textAlign: "center",
+    padding: "25px",
+  },
+
+  successIcon: {
+    width: "55px",
+    height: "55px",
+    borderRadius: "50%",
+    background: "#35d07f",
+    color: "#06150d",
+    display: "grid",
+    placeItems: "center",
+    margin: "0 auto 15px",
+    fontSize: "25px",
+    fontWeight: 900,
+  },
+
+  actionRowCenter: {
+    display: "flex",
+    justifyContent: "center",
+    gap: "10px",
+    flexWrap: "wrap",
+    margin: "25px 0",
+  },
+};
