@@ -123,6 +123,54 @@ export default function Home() {
     }
   }
 
+  async function startBuilder() {
+    const text = builderPrompt.trim();
+
+    if (!text) {
+      setError("Describe what you want BOMBA AI to build.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/builder/projects", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          originalRequest: text,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error ||
+            "BOMBA AI could not save your project."
+        );
+      }
+
+      if (!data?.project) {
+        throw new Error("The project was not returned.");
+      }
+
+      setError(
+        "✅ Project saved successfully. Your BOMBA Builder workspace is ready."
+      );
+    } catch (err) {
+      setError(
+        err?.message ||
+          "Something went wrong while saving your project."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function downloadImage() {
     if (!image) return;
 
@@ -147,7 +195,9 @@ export default function Home() {
       return;
     }
 
-    setError(`${name} is coming next. We're building BOMBA AI one feature at a time.`);
+    setError(
+      `${name} is coming next. We're building BOMBA AI one feature at a time.`
+    );
   }
 
   return (
@@ -194,8 +244,7 @@ export default function Home() {
 
         <div style={styles.featureRow}>
           {FEATURES.map((feature) => {
-            const isActive =
-              activeFeature === feature.name;
+            const isActive = activeFeature === feature.name;
 
             return (
               <button
@@ -224,9 +273,7 @@ export default function Home() {
         <section style={styles.workspace}>
           <div style={styles.sectionTop}>
             <div>
-              <div style={styles.smallGold}>
-                BUILD
-              </div>
+              <div style={styles.smallGold}>BUILD</div>
 
               <h2 style={styles.sectionTitle}>
                 Universal Builder
@@ -240,9 +287,7 @@ export default function Home() {
           </div>
 
           <div style={styles.builderCard}>
-            <div style={styles.builderLogo}>
-              TB
-            </div>
+            <div style={styles.builderLogo}>TB</div>
 
             <h2 style={styles.builderTitle}>
               Build anything with BOMBA AI
@@ -260,30 +305,26 @@ export default function Home() {
 
             <textarea
               value={builderPrompt}
-              onChange={(e) =>
-                setBuilderPrompt(e.target.value)
-              }
+              onChange={(e) => {
+                setBuilderPrompt(e.target.value);
+                setError("");
+              }}
               placeholder="Example: Build a school management system for students, teachers, classes and school administrators..."
               style={styles.textarea}
             />
 
             <button
               type="button"
-              onClick={() => {
-                if (!builderPrompt.trim()) {
-                  setError(
-                    "Describe what you want BOMBA AI to build."
-                  );
-                  return;
-                }
-
-                setError(
-                  "Your project description is ready. The Universal Builder build system will be connected next."
-                );
+              disabled={loading}
+              onClick={startBuilder}
+              style={{
+                ...styles.generateButton,
+                opacity: loading ? 0.65 : 1,
               }}
-              style={styles.generateButton}
             >
-              🚀 START BUILDING
+              {loading
+                ? "SAVING PROJECT..."
+                : "🚀 START BUILDING"}
             </button>
 
             {error && (
@@ -359,9 +400,7 @@ export default function Home() {
         <section style={styles.workspace}>
           <div style={styles.sectionTop}>
             <div>
-              <div style={styles.smallGold}>
-                CREATE
-              </div>
+              <div style={styles.smallGold}>CREATE</div>
 
               <h2 style={styles.sectionTitle}>
                 AI Flyer Generator
@@ -622,8 +661,7 @@ const styles = {
     minHeight: "100vh",
     background: "#050505",
     color: "#ffffff",
-    fontFamily:
-      "Inter, Arial, Helvetica, sans-serif",
+    fontFamily: "Inter, Arial, Helvetica, sans-serif",
     paddingBottom: "40px",
   },
 
@@ -666,8 +704,7 @@ const styles = {
     justifyContent: "center",
     fontWeight: 900,
     fontSize: "16px",
-    boxShadow:
-      "0 0 22px rgba(255,212,59,0.18)",
+    boxShadow: "0 0 22px rgba(255,212,59,0.18)",
   },
 
   brandName: {
@@ -730,8 +767,7 @@ const styles = {
 
   featureRow: {
     display: "grid",
-    gridTemplateColumns:
-      "repeat(5, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
     gap: "7px",
     marginTop: "28px",
     maxWidth: "700px",
@@ -752,8 +788,7 @@ const styles = {
   featureActive: {
     border: "1px solid #FFD43B",
     background: "#171406",
-    boxShadow:
-      "0 0 18px rgba(255,212,59,0.08)",
+    boxShadow: "0 0 18px rgba(255,212,59,0.08)",
   },
 
   featureIcon: {
@@ -817,8 +852,7 @@ const styles = {
     border: "1px solid #242424",
     borderRadius: "18px",
     padding: "18px",
-    boxShadow:
-      "0 15px 50px rgba(0,0,0,0.25)",
+    boxShadow: "0 15px 50px rgba(0,0,0,0.25)",
   },
 
   builderCard: {
@@ -826,8 +860,7 @@ const styles = {
     border: "1px solid #242424",
     borderRadius: "18px",
     padding: "22px 18px",
-    boxShadow:
-      "0 15px 50px rgba(0,0,0,0.25)",
+    boxShadow: "0 15px 50px rgba(0,0,0,0.25)",
     textAlign: "center",
   },
 
@@ -843,8 +876,7 @@ const styles = {
     justifyContent: "center",
     fontWeight: 950,
     fontSize: "19px",
-    boxShadow:
-      "0 0 25px rgba(255,212,59,0.14)",
+    boxShadow: "0 0 25px rgba(255,212,59,0.14)",
   },
 
   builderTitle: {
@@ -864,8 +896,7 @@ const styles = {
   builderSteps: {
     marginTop: "25px",
     display: "grid",
-    gridTemplateColumns:
-      "repeat(2, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: "9px",
     textAlign: "left",
   },
@@ -1070,8 +1101,7 @@ const styles = {
     fontWeight: 950,
     fontSize: "13px",
     cursor: "pointer",
-    boxShadow:
-      "0 8px 28px rgba(255,212,59,0.14)",
+    boxShadow: "0 8px 28px rgba(255,212,59,0.14)",
   },
 
   spinner: {
@@ -1083,8 +1113,7 @@ const styles = {
     borderRadius: "50%",
     marginRight: "8px",
     verticalAlign: "-2px",
-    animation:
-      "bombaSpin 0.8s linear infinite",
+    animation: "bombaSpin 0.8s linear infinite",
   },
 
   error: {
