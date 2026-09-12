@@ -126,55 +126,85 @@ export default function Home() {
     }
   }
 
-  async function startBuilder() {
-    const text = builderPrompt.trim();
+  
+async function startBuilder() {
+  const text = builderPrompt.trim();
 
-    if (!text) {
-      setError("Describe what you want BOMBA AI to build.");
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-    setBuilderView("start");
-
-    try {
-      const response = await fetch("/api/builder/projects", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          originalRequest: text,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data?.error ||
-            "BOMBA AI could not save your project."
-        );
-      }
-
-      if (!data?.project) {
-        throw new Error("The project was not returned.");
-      }
-
-      setBuilderProject(data.project);
-      setBuilderView("workspace");
-      setError("");
-    } catch (err) {
-      setError(
-        err?.message ||
-          "Something went wrong while saving your project."
-      );
-    } finally {
-      setLoading(false);
-    }
+  if (!text) {
+    setError("Describe what you want BOMBA AI to build.");
+    return;
   }
 
+  setLoading(true);
+  setError("");
+  setBuilderView("start");
+
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey =
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error("Supabase is not configured.");
+    }
+
+    const { createClient } = await import("@supabase/supabase-js");
+
+    const supabase = createClient(
+      supabaseUrl,
+      supabaseAnonKey
+    );
+
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
+
+    if (sessionError || !session) {
+      throw new Error(
+        "Please log in before starting a project."
+      );
+    }
+
+    const response = await fetch("/api/builder/projects", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        originalRequest: text,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data?.error ||
+          "BOMBA AI could not save your project."
+      );
+    }
+
+    if (!data?.project) {
+      throw new Error(
+        "BOMBA AI did not return the created project."
+      );
+    }
+
+    setBuilderProject(data.project);
+    setBuilderView("workspace");
+  } catch (error) {
+    console.error("Builder start error:", error);
+
+    setError(
+      error?.message ||
+        "Something went wrong while starting your project."
+    );
+  } finally {
+    setLoading(false);
+  }
+}
   function downloadImage() {
     if (!image) return;
 
