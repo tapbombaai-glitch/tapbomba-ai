@@ -33,21 +33,47 @@ export async function POST(req) {
       );
     }
 
+    const authHeader = req.headers.get("authorization");
+
+    if (!authHeader) {
+      return NextResponse.json(
+        {
+          error: "Please log in before starting a project.",
+        },
+        { status: 401 }
+      );
+    }
+
     const supabase = createClient(
       supabaseUrl,
-      supabaseAnonKey
+      supabaseAnonKey,
+      {
+        global: {
+          headers: {
+            Authorization: authHeader,
+          },
+        },
+      }
     );
 
-    /*
-      For this first connection test we create the project
-      without requiring login yet.
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
-      Authentication will be connected separately so every
-      project can belong securely to its owner.
-    */
+    if (userError || !user) {
+      return NextResponse.json(
+        {
+          error: "Your login session could not be verified.",
+        },
+        { status: 401 }
+      );
+    }
+
     const { data, error } = await supabase
       .from("builder_projects")
       .insert({
+        owner_id: user.id,
         original_request: originalRequest,
         project_name: "New BOMBA Project",
         build_plan: [],
