@@ -2091,4 +2091,19 @@ const styles = {
   footerLogo: {
     width: "36px",
     height: "36px",
-    borderRadius: "9
+    borderRadius: "9px",
+    background: "#FFD43B",
+    color: "#000000",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: 950,
+    fontSize: "13px",
+  },
+
+  footerText: {
+    color: "#777777",
+    fontSize: "10px",
+    marginTop: "2px",
+  },
+};
