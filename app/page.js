@@ -20,6 +20,7 @@ const FEATURES = [
 
 export default function Home() {
   const [activeFeature, setActiveFeature] = useState("Flyer");
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const [prompt, setPrompt] = useState("");
   const [image, setImage] = useState("");
@@ -186,6 +187,8 @@ export default function Home() {
   }
 
   function selectFeature(name) {
+    setMenuOpen(false);
+
     if (name === "Universal Builder") {
       setActiveFeature("Universal Builder");
       setError("");
@@ -210,15 +213,54 @@ export default function Home() {
     setError("");
   }
 
+  function goHome() {
+    setMenuOpen(false);
+    setActiveFeature("Flyer");
+    setError("");
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  }
+
+  function openFlyer() {
+    setMenuOpen(false);
+    setActiveFeature("Flyer");
+    setError("");
+
+    setTimeout(() => {
+      window.scrollTo({
+        top: document.body.scrollHeight,
+        behavior: "smooth",
+      });
+    }, 50);
+  }
+
+  function openBuilder() {
+    setMenuOpen(false);
+    setActiveFeature("Universal Builder");
+    setError("");
+
+    setTimeout(() => {
+      window.scrollTo({
+        top: document.body.scrollHeight,
+        behavior: "smooth",
+      });
+    }, 50);
+  }
+
+  function openAuth() {
+    setMenuOpen(false);
+    window.location.href = "/auth";
+  }
+
   return (
     <main style={styles.page}>
       <header style={styles.header}>
         <button
           type="button"
-          onClick={() => {
-            setActiveFeature("Flyer");
-            setError("");
-          }}
+          onClick={goHome}
           style={styles.brandButton}
         >
           <div style={styles.brand}>
@@ -233,12 +275,92 @@ export default function Home() {
 
         <button
           type="button"
-          style={styles.menuButton}
-          onClick={() => setError("Dashboard menu is coming next.")}
+          style={{
+            ...styles.menuButton,
+            ...(menuOpen ? styles.menuButtonOpen : {}),
+          }}
+          onClick={() => {
+            setMenuOpen((current) => !current);
+            setError("");
+          }}
+          aria-label="Open BOMBA AI menu"
+          aria-expanded={menuOpen}
         >
-          ☰
+          {menuOpen ? "✕" : "☰"}
         </button>
       </header>
+
+      {menuOpen && (
+        <>
+          <div
+            style={styles.menuOverlay}
+            onClick={() => setMenuOpen(false)}
+          />
+
+          <div style={styles.menuPanel}>
+            <div style={styles.menuHeader}>
+              <div>
+                <div style={styles.menuBrand}>BOMBA AI</div>
+                <div style={styles.menuTagline}>
+                  Automate. Grow. Earn.
+                </div>
+              </div>
+
+              <div style={styles.menuTB}>TB</div>
+            </div>
+
+            <div style={styles.menuDivider}></div>
+
+            <button
+              type="button"
+              style={styles.menuItem}
+              onClick={goHome}
+            >
+              <span style={styles.menuIcon}>🏠</span>
+              <span>Home</span>
+            </button>
+
+            <button
+              type="button"
+              style={styles.menuItem}
+              onClick={openFlyer}
+            >
+              <span style={styles.menuIcon}>🎨</span>
+              <span>Flyer Generator</span>
+            </button>
+
+            <button
+              type="button"
+              style={styles.menuItem}
+              onClick={openBuilder}
+            >
+              <span style={styles.menuIcon}>🛠️</span>
+              <span>Universal Builder</span>
+            </button>
+
+            <button
+              type="button"
+              style={styles.menuItem}
+              onClick={openAuth}
+            >
+              <span style={styles.menuIcon}>🔐</span>
+              <span>Login / Sign Up</span>
+            </button>
+
+            <div style={styles.menuDivider}></div>
+
+            <div style={styles.menuComing}>
+              <div style={styles.menuComingTitle}>
+                More coming soon
+              </div>
+
+              <div style={styles.menuComingText}>
+                Website • Logo • Image • AI Tools
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       <section style={styles.hero}>
         <div style={styles.eyebrow}>
@@ -1038,7 +1160,7 @@ const styles = {
     borderBottom: "1px solid #1d1d1d",
     position: "sticky",
     top: 0,
-    zIndex: 20,
+    zIndex: 120,
     background: "rgba(5,5,5,0.96)",
     backdropFilter: "blur(12px)",
   },
@@ -1085,6 +1207,8 @@ const styles = {
   },
 
   menuButton: {
+    position: "relative",
+    zIndex: 130,
     border: "1px solid #292929",
     background: "#111111",
     color: "#ffffff",
@@ -1093,6 +1217,111 @@ const styles = {
     height: "42px",
     fontSize: "20px",
     cursor: "pointer",
+    transition: "all 0.2s ease",
+  },
+
+  menuButtonOpen: {
+    background: "#FFD43B",
+    color: "#000000",
+    borderColor: "#FFD43B",
+  },
+
+  menuOverlay: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 90,
+    background: "rgba(0,0,0,0.48)",
+  },
+
+  menuPanel: {
+    position: "fixed",
+    top: "72px",
+    right: "16px",
+    width: "260px",
+    maxWidth: "calc(100vw - 32px)",
+    background: "#0d0d0d",
+    border: "1px solid #303030",
+    borderRadius: "16px",
+    padding: "9px",
+    zIndex: 110,
+    boxShadow: "0 20px 60px rgba(0,0,0,0.65)",
+  },
+
+  menuHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "10px 9px 12px",
+  },
+
+  menuBrand: {
+    fontSize: "14px",
+    fontWeight: 950,
+    letterSpacing: "0.5px",
+  },
+
+  menuTagline: {
+    color: "#777777",
+    fontSize: "9px",
+    marginTop: "3px",
+  },
+
+  menuTB: {
+    width: "34px",
+    height: "34px",
+    borderRadius: "9px",
+    background: "#FFD43B",
+    color: "#000000",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "12px",
+    fontWeight: 950,
+  },
+
+  menuDivider: {
+    height: "1px",
+    background: "#242424",
+    margin: "3px 0 7px",
+  },
+
+  menuItem: {
+    width: "100%",
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    border: "none",
+    background: "transparent",
+    color: "#ffffff",
+    borderRadius: "10px",
+    padding: "13px 11px",
+    fontSize: "13px",
+    fontWeight: 800,
+    textAlign: "left",
+    cursor: "pointer",
+  },
+
+  menuIcon: {
+    width: "24px",
+    textAlign: "center",
+    fontSize: "17px",
+  },
+
+  menuComing: {
+    padding: "9px 10px 8px",
+  },
+
+  menuComingTitle: {
+    color: "#FFD43B",
+    fontSize: "10px",
+    fontWeight: 900,
+  },
+
+  menuComingText: {
+    color: "#666666",
+    fontSize: "9px",
+    lineHeight: 1.5,
+    marginTop: "3px",
   },
 
   hero: {
@@ -1862,19 +2091,4 @@ const styles = {
   footerLogo: {
     width: "36px",
     height: "36px",
-    borderRadius: "9px",
-    background: "#FFD43B",
-    color: "#000000",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontWeight: 950,
-    fontSize: "13px",
-  },
-
-  footerText: {
-    color: "#777777",
-    fontSize: "10px",
-    marginTop: "2px",
-  },
-};
+    borderRadius: "9
