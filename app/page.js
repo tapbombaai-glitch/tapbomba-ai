@@ -23,6 +23,8 @@ export default function Home() {
   const [image, setImage] = useState("");
   const [uploadedImage, setUploadedImage] = useState("");
   const [uploadedName, setUploadedName] = useState("");
+  const [photoSize, setPhotoSize] = useState("medium");
+  const [photoPosition, setPhotoPosition] = useState("center");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -89,6 +91,8 @@ export default function Home() {
           prompt: text,
           type: "flyer",
           referenceImage: uploadedImage || null,
+          photoSize: uploadedImage ? photoSize : null,
+          photoPosition: uploadedImage ? photoPosition : null,
         }),
       });
 
@@ -167,7 +171,9 @@ export default function Home() {
         <div style={styles.sectionTop}>
           <div>
             <div style={styles.smallGold}>CREATE</div>
-            <h2 style={styles.sectionTitle}>AI Flyer Generator</h2>
+            <h2 style={styles.sectionTitle}>
+              AI Flyer Generator
+            </h2>
           </div>
 
           <div style={styles.liveBadge}>
@@ -218,31 +224,101 @@ export default function Home() {
               onClick={() => fileInputRef.current?.click()}
               style={styles.uploadButton}
             >
-              📷 {uploadedImage ? "Change Photo / Logo" : "Upload Photo / Logo"}
+              📷{" "}
+              {uploadedImage
+                ? "Change Photo / Logo"
+                : "Upload Photo / Logo"}
             </button>
 
             {uploadedImage && (
-              <div style={styles.uploadPreview}>
-                <img
-                  src={uploadedImage}
-                  alt="Uploaded photo or logo"
-                  style={styles.previewImage}
-                />
+              <>
+                <div style={styles.uploadPreview}>
+                  <img
+                    src={uploadedImage}
+                    alt="Uploaded photo or logo"
+                    style={styles.previewImage}
+                  />
 
-                <div style={styles.uploadInfo}>
-                  <div style={styles.uploadedName}>
-                    {uploadedName || "Uploaded image"}
+                  <div style={styles.uploadInfo}>
+                    <div style={styles.uploadedName}>
+                      {uploadedName || "Uploaded image"}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={removeUploadedImage}
+                      style={styles.removeButton}
+                    >
+                      ✕ Remove
+                    </button>
+                  </div>
+                </div>
+
+                <div style={styles.controlsBox}>
+                  <div style={styles.controlGroup}>
+                    <div style={styles.controlTitle}>
+                      📐 Photo Size
+                    </div>
+
+                    <div style={styles.optionRow}>
+                      {[
+                        ["small", "Small"],
+                        ["medium", "Medium"],
+                        ["large", "Large"],
+                        ["full", "Full"],
+                      ].map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setPhotoSize(value)}
+                          style={{
+                            ...styles.optionButton,
+                            ...(photoSize === value
+                              ? styles.optionButtonActive
+                              : {}),
+                          }}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={removeUploadedImage}
-                    style={styles.removeButton}
-                  >
-                    ✕ Remove
-                  </button>
+                  <div style={styles.controlGroup}>
+                    <div style={styles.controlTitle}>
+                      ↔️ Photo Position
+                    </div>
+
+                    <div style={styles.optionRow}>
+                      {[
+                        ["left", "Left"],
+                        ["center", "Center"],
+                        ["right", "Right"],
+                      ].map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setPhotoPosition(value)}
+                          style={{
+                            ...styles.optionButton,
+                            ...(photoPosition === value
+                              ? styles.optionButtonActive
+                              : {}),
+                          }}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={styles.controlNote}>
+                    ✓ BOMBA AI will use your uploaded image as
+                    the photo reference instead of creating a
+                    different person.
+                  </div>
                 </div>
-              </div>
+              </>
             )}
           </div>
 
@@ -264,9 +340,7 @@ export default function Home() {
             )}
           </button>
 
-          {error && (
-            <div style={styles.error}>{error}</div>
-          )}
+          {error && <div style={styles.error}>{error}</div>}
         </div>
 
         {loading && (
@@ -279,7 +353,8 @@ export default function Home() {
 
             <p style={styles.loadingText}>
               Understanding your request → using your uploaded
-              image → designing the composition → generating the flyer
+              image → applying your photo settings → designing
+              the composition → generating the flyer
             </p>
           </div>
         )}
@@ -346,228 +421,231 @@ const styles = {
   page: {
     minHeight: "100vh",
     background: "#050505",
-    color: "#fff",
-    fontFamily: "Arial, Helvetica, sans-serif",
-    paddingBottom: 50,
+    color: "#ffffff",
+    fontFamily:
+      "Inter, Arial, Helvetica, sans-serif",
+    paddingBottom: "40px",
   },
 
   header: {
-    width: "100%",
-    maxWidth: 1100,
-    margin: "0 auto",
-    padding: "18px",
-    boxSizing: "border-box",
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    borderBottom: "1px solid #1b1b1b",
+    padding: "18px 16px",
+    borderBottom: "1px solid #1d1d1d",
+    position: "sticky",
+    top: 0,
+    zIndex: 20,
+    background: "rgba(5,5,5,0.96)",
+    backdropFilter: "blur(12px)",
   },
 
   brand: {
     display: "flex",
     alignItems: "center",
-    gap: 12,
+    gap: "11px",
   },
 
   logo: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+    width: "44px",
+    height: "44px",
+    borderRadius: "10px",
     background: "#FFD43B",
-    color: "#050505",
+    color: "#000000",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontWeight: 1000,
-    fontSize: 20,
-    letterSpacing: -1,
-    boxShadow: "0 0 24px rgba(255,212,59,.18)",
+    fontWeight: 900,
+    fontSize: "16px",
+    boxShadow: "0 0 22px rgba(255,212,59,0.18)",
   },
 
   brandName: {
-    fontSize: 20,
+    fontSize: "17px",
     fontWeight: 900,
-    letterSpacing: 1,
+    letterSpacing: "0.5px",
   },
 
   tagline: {
-    color: "#999",
-    fontSize: 11,
-    marginTop: 3,
+    fontSize: "11px",
+    color: "#aaaaaa",
+    marginTop: "2px",
   },
 
   menuButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 10,
     border: "1px solid #292929",
-    background: "#111",
-    color: "#fff",
-    fontSize: 20,
+    background: "#111111",
+    color: "#ffffff",
+    borderRadius: "10px",
+    width: "42px",
+    height: "42px",
+    fontSize: "20px",
     cursor: "pointer",
   },
 
   hero: {
-    maxWidth: 950,
-    margin: "0 auto",
-    padding: "55px 18px 35px",
     textAlign: "center",
+    padding: "45px 18px 30px",
+    maxWidth: "850px",
+    margin: "0 auto",
   },
 
   eyebrow: {
+    display: "inline-block",
+    fontSize: "10px",
+    letterSpacing: "2px",
     color: "#FFD43B",
-    fontSize: 11,
-    fontWeight: 800,
-    letterSpacing: 2,
-    marginBottom: 18,
+    border: "1px solid #4b411d",
+    background: "#100f08",
+    padding: "7px 10px",
+    borderRadius: "999px",
+    marginBottom: "15px",
   },
 
   heroTitle: {
     margin: 0,
-    fontSize: "clamp(36px, 8vw, 72px)",
-    lineHeight: 0.98,
-    fontWeight: 1000,
-    letterSpacing: -3,
+    fontSize: "clamp(34px, 9vw, 64px)",
+    lineHeight: 1.02,
+    fontWeight: 950,
+    letterSpacing: "-2px",
   },
 
   heroText: {
-    maxWidth: 650,
-    margin: "22px auto 0",
-    color: "#aaa",
-    fontSize: 16,
+    color: "#a8a8a8",
+    maxWidth: "650px",
+    margin: "18px auto 0",
     lineHeight: 1.6,
+    fontSize: "14px",
   },
 
   featureRow: {
-    display: "flex",
-    justifyContent: "center",
-    gap: 10,
-    flexWrap: "wrap",
-    marginTop: 34,
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(5, minmax(0, 1fr))",
+    gap: "7px",
+    marginTop: "28px",
+    maxWidth: "600px",
+    marginLeft: "auto",
+    marginRight: "auto",
   },
 
   feature: {
-    minWidth: 82,
-    padding: "12px 14px",
+    border: "1px solid #202020",
     background: "#0d0d0d",
-    border: "1px solid #222",
-    borderRadius: 12,
+    borderRadius: "12px",
+    padding: "10px 4px",
   },
 
   featureIcon: {
-    fontSize: 20,
-    marginBottom: 5,
+    fontSize: "18px",
   },
 
   featureName: {
-    fontSize: 11,
-    color: "#bbb",
-    fontWeight: 700,
+    marginTop: "5px",
+    fontSize: "9px",
+    color: "#bdbdbd",
   },
 
   workspace: {
-    maxWidth: 900,
-    margin: "10px auto 0",
-    padding: "0 18px",
+    maxWidth: "760px",
+    margin: "0 auto",
+    padding: "10px 16px 0",
   },
 
   sectionTop: {
     display: "flex",
-    justifyContent: "space-between",
     alignItems: "flex-end",
-    gap: 15,
-    marginBottom: 16,
+    justifyContent: "space-between",
+    gap: "15px",
+    marginBottom: "14px",
   },
 
   smallGold: {
     color: "#FFD43B",
-    fontSize: 10,
-    fontWeight: 900,
-    letterSpacing: 2,
-    marginBottom: 5,
+    fontSize: "10px",
+    letterSpacing: "1.7px",
+    fontWeight: 800,
   },
 
   sectionTitle: {
-    margin: 0,
-    fontSize: 25,
-    fontWeight: 900,
+    margin: "5px 0 0",
+    fontSize: "22px",
   },
 
   liveBadge: {
-    border: "1px solid #303030",
-    background: "#101010",
-    borderRadius: 20,
-    padding: "7px 10px",
-    fontSize: 9,
-    fontWeight: 900,
-    color: "#bbb",
+    fontSize: "9px",
+    border: "1px solid #2b2b2b",
+    borderRadius: "999px",
+    padding: "7px 9px",
+    color: "#cfcfcf",
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
   },
 
   liveDot: {
-    display: "inline-block",
-    width: 7,
-    height: 7,
+    width: "6px",
+    height: "6px",
     borderRadius: "50%",
     background: "#FFD43B",
-    marginRight: 6,
+    display: "inline-block",
   },
 
   card: {
-    background: "#0c0c0c",
-    border: "1px solid #252525",
-    borderRadius: 18,
-    padding: 18,
+    background: "#0d0d0d",
+    border: "1px solid #242424",
+    borderRadius: "18px",
+    padding: "18px",
+    boxShadow: "0 15px 50px rgba(0,0,0,0.25)",
   },
 
   label: {
     display: "block",
-    color: "#fff",
+    fontSize: "13px",
     fontWeight: 800,
-    fontSize: 14,
-    marginBottom: 10,
+    marginBottom: "9px",
   },
 
   textarea: {
     width: "100%",
-    minHeight: 145,
-    boxSizing: "border-box",
+    minHeight: "145px",
     resize: "vertical",
-    borderRadius: 13,
-    border: "1px solid #292929",
+    boxSizing: "border-box",
     background: "#050505",
-    color: "#fff",
-    padding: 15,
-    fontSize: 15,
-    lineHeight: 1.5,
+    border: "1px solid #292929",
+    borderRadius: "12px",
+    color: "#ffffff",
+    padding: "14px",
     outline: "none",
+    fontSize: "14px",
+    lineHeight: 1.55,
   },
 
   helper: {
-    color: "#777",
-    fontSize: 11,
+    color: "#858585",
+    fontSize: "11px",
     lineHeight: 1.5,
-    marginTop: 9,
+    marginTop: "8px",
   },
 
   uploadBox: {
-    marginTop: 18,
-    padding: 16,
-    borderRadius: 14,
+    marginTop: "18px",
+    border: "1px dashed #494949",
     background: "#090909",
-    border: "1px dashed #3a3a3a",
+    borderRadius: "14px",
+    padding: "15px",
   },
 
   uploadTitle: {
-    fontSize: 14,
-    fontWeight: 900,
-    color: "#fff",
+    fontSize: "13px",
+    fontWeight: 800,
   },
 
   uploadText: {
-    marginTop: 5,
-    color: "#777",
-    fontSize: 11,
+    color: "#858585",
+    fontSize: "11px",
     lineHeight: 1.5,
+    marginTop: "5px",
   },
 
   hiddenInput: {
@@ -575,211 +653,260 @@ const styles = {
   },
 
   uploadButton: {
-    width: "100%",
-    marginTop: 13,
-    padding: 13,
-    borderRadius: 11,
-    border: "1px solid #3a3a3a",
-    background: "#111",
+    marginTop: "12px",
+    border: "1px solid #5c4e1d",
+    background: "#171406",
     color: "#FFD43B",
-    fontWeight: 900,
-    fontSize: 13,
-    cursor: "pointer",
-  },
-
-  uploadPreview: {
-    marginTop: 14,
-    display: "flex",
-    gap: 12,
-    alignItems: "center",
-    padding: 10,
-    background: "#050505",
-    borderRadius: 12,
-    border: "1px solid #242424",
-  },
-
-  previewImage: {
-    width: 70,
-    height: 70,
-    objectFit: "cover",
-    borderRadius: 9,
-    display: "block",
-  },
-
-  uploadInfo: {
-    minWidth: 0,
-    flex: 1,
-  },
-
-  uploadedName: {
-    color: "#ccc",
-    fontSize: 12,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  },
-
-  removeButton: {
-    marginTop: 8,
-    border: "none",
-    background: "transparent",
-    color: "#ff8585",
-    padding: 0,
-    fontSize: 11,
+    borderRadius: "10px",
+    padding: "10px 13px",
+    fontSize: "12px",
     fontWeight: 800,
     cursor: "pointer",
   },
 
+  uploadPreview: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    marginTop: "14px",
+    padding: "10px",
+    borderRadius: "11px",
+    background: "#111111",
+    border: "1px solid #252525",
+  },
+
+  previewImage: {
+    width: "70px",
+    height: "70px",
+    objectFit: "cover",
+    borderRadius: "9px",
+    border: "1px solid #3a3a3a",
+  },
+
+  uploadInfo: {
+    minWidth: 0,
+  },
+
+  uploadedName: {
+    fontSize: "11px",
+    color: "#dddddd",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    maxWidth: "210px",
+  },
+
+  removeButton: {
+    marginTop: "7px",
+    border: "none",
+    background: "transparent",
+    color: "#ff7777",
+    padding: 0,
+    fontSize: "11px",
+    cursor: "pointer",
+  },
+
+  controlsBox: {
+    marginTop: "14px",
+    paddingTop: "14px",
+    borderTop: "1px solid #242424",
+  },
+
+  controlGroup: {
+    marginBottom: "15px",
+  },
+
+  controlTitle: {
+    fontSize: "12px",
+    fontWeight: 800,
+    marginBottom: "8px",
+  },
+
+  optionRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "7px",
+  },
+
+  optionButton: {
+    border: "1px solid #303030",
+    background: "#121212",
+    color: "#c5c5c5",
+    borderRadius: "9px",
+    padding: "9px 12px",
+    fontSize: "11px",
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+
+  optionButtonActive: {
+    border: "1px solid #FFD43B",
+    background: "#211d08",
+    color: "#FFD43B",
+  },
+
+  controlNote: {
+    color: "#9d9d9d",
+    fontSize: "10px",
+    lineHeight: 1.5,
+    background: "#111111",
+    borderRadius: "9px",
+    padding: "9px",
+  },
+
   generateButton: {
     width: "100%",
-    marginTop: 17,
-    minHeight: 52,
+    marginTop: "17px",
     border: "none",
-    borderRadius: 12,
+    borderRadius: "12px",
     background: "#FFD43B",
-    color: "#050505",
-    fontWeight: 1000,
-    fontSize: 14,
+    color: "#000000",
+    padding: "15px",
+    fontWeight: 950,
+    fontSize: "13px",
     cursor: "pointer",
+    boxShadow: "0 8px 28px rgba(255,212,59,0.14)",
   },
 
   spinner: {
     display: "inline-block",
-    width: 13,
-    height: 13,
-    border: "2px solid #555",
-    borderTop: "2px solid #050505",
+    width: "13px",
+    height: "13px",
+    border: "2px solid rgba(0,0,0,0.3)",
+    borderTopColor: "#000000",
     borderRadius: "50%",
-    marginRight: 8,
+    marginRight: "8px",
     verticalAlign: "-2px",
+    animation: "bombaSpin 0.8s linear infinite",
   },
 
   error: {
-    marginTop: 14,
-    padding: 12,
-    borderRadius: 10,
-    background: "#211010",
-    border: "1px solid #5b2222",
-    color: "#ff9b9b",
-    fontSize: 13,
+    marginTop: "12px",
+    padding: "11px",
+    borderRadius: "10px",
+    background: "#241010",
+    border: "1px solid #522121",
+    color: "#ffaaaa",
+    fontSize: "12px",
+    lineHeight: 1.5,
   },
 
   loadingCard: {
-    marginTop: 18,
-    padding: 30,
-    borderRadius: 18,
-    background: "#0c0c0c",
-    border: "1px solid #252525",
+    marginTop: "18px",
+    border: "1px solid #2c2817",
+    background: "#0e0d08",
+    borderRadius: "16px",
+    padding: "25px 18px",
     textAlign: "center",
   },
 
   loadingLogo: {
-    width: 58,
-    height: 58,
-    margin: "0 auto 16px",
-    borderRadius: 15,
+    width: "48px",
+    height: "48px",
+    margin: "0 auto 12px",
+    borderRadius: "11px",
     background: "#FFD43B",
-    color: "#050505",
+    color: "#000000",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontWeight: 1000,
-    fontSize: 20,
+    fontWeight: 950,
   },
 
   loadingTitle: {
     margin: 0,
-    fontSize: 19,
+    fontSize: "16px",
   },
 
   loadingText: {
-    color: "#888",
-    fontSize: 13,
-    lineHeight: 1.5,
-    maxWidth: 450,
-    margin: "10px auto 0",
+    color: "#929292",
+    fontSize: "11px",
+    lineHeight: 1.6,
+    maxWidth: "480px",
+    margin: "9px auto 0",
   },
 
   resultSection: {
-    marginTop: 24,
+    marginTop: "24px",
   },
 
   resultHeader: {
     display: "flex",
     alignItems: "flex-end",
     justifyContent: "space-between",
-    gap: 15,
-    marginBottom: 14,
+    gap: "10px",
+    marginBottom: "12px",
   },
 
   resultTitle: {
-    margin: 0,
-    fontSize: 25,
+    margin: "5px 0 0",
+    fontSize: "21px",
   },
 
   downloadButton: {
-    background: "#FFD43B",
-    color: "#050505",
-    border: "none",
-    borderRadius: 10,
-    padding: "11px 14px",
-    fontWeight: 900,
+    border: "1px solid #514719",
+    background: "#151205",
+    color: "#FFD43B",
+    borderRadius: "10px",
+    padding: "9px 12px",
+    fontSize: "11px",
+    fontWeight: 800,
     cursor: "pointer",
   },
 
   imageFrame: {
-    background: "#000",
-    border: "1px solid #282828",
-    borderRadius: 18,
-    padding: 10,
-    maxWidth: 700,
-    margin: "0 auto",
+    background: "#000000",
+    border: "1px solid #292929",
+    borderRadius: "16px",
+    overflow: "hidden",
   },
 
   generatedImage: {
     width: "100%",
     display: "block",
-    borderRadius: 11,
+    height: "auto",
   },
 
   createAnother: {
     width: "100%",
-    marginTop: 14,
-    padding: 14,
-    background: "#111",
-    border: "1px solid #292929",
-    color: "#fff",
-    borderRadius: 11,
+    marginTop: "12px",
+    background: "#111111",
+    border: "1px solid #2c2c2c",
+    color: "#ffffff",
+    borderRadius: "11px",
+    padding: "12px",
     fontWeight: 800,
+    fontSize: "12px",
     cursor: "pointer",
   },
 
   footer: {
-    maxWidth: 900,
-    margin: "55px auto 0",
-    padding: "20px 18px",
-    borderTop: "1px solid #1c1c1c",
+    maxWidth: "760px",
+    margin: "50px auto 0",
+    padding: "18px 16px",
+    borderTop: "1px solid #1d1d1d",
     display: "flex",
     alignItems: "center",
-    gap: 12,
-    color: "#aaa",
+    gap: "10px",
+    color: "#ffffff",
   },
 
   footerLogo: {
-    width: 38,
-    height: 38,
-    borderRadius: 9,
+    width: "36px",
+    height: "36px",
+    borderRadius: "9px",
     background: "#FFD43B",
-    color: "#050505",
+    color: "#000000",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontWeight: 1000,
+    fontWeight: 950,
+    fontSize: "13px",
   },
 
   footerText: {
-    fontSize: 11,
-    color: "#666",
-    marginTop: 3,
+    color: "#777777",
+    fontSize: "10px",
+    marginTop: "2px",
   },
 };
