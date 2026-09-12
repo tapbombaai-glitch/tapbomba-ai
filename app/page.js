@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 const BRAND = {
   name: "BOMBA AI",
@@ -21,8 +21,51 @@ const FEATURES = [
 export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [image, setImage] = useState("");
+  const [uploadedImage, setUploadedImage] = useState("");
+  const [uploadedName, setUploadedName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const fileInputRef = useRef(null);
+
+  function handleImageUpload(event) {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setError("Please upload an image file.");
+      return;
+    }
+
+    if (file.size > 8 * 1024 * 1024) {
+      setError("Please choose an image smaller than 8MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      setUploadedImage(reader.result);
+      setUploadedName(file.name);
+      setError("");
+    };
+
+    reader.onerror = () => {
+      setError("BOMBA AI could not read that image.");
+    };
+
+    reader.readAsDataURL(file);
+  }
+
+  function removeUploadedImage() {
+    setUploadedImage("");
+    setUploadedName("");
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }
 
   async function generateFlyer() {
     const text = prompt.trim();
@@ -45,6 +88,7 @@ export default function Home() {
         body: JSON.stringify({
           prompt: text,
           type: "flyer",
+          referenceImage: uploadedImage || null,
         }),
       });
 
@@ -98,11 +142,11 @@ export default function Home() {
       </header>
 
       <section style={styles.hero}>
-        <div style={styles.eyebrow}>UNIVERSAL AI CREATION PLATFORM</div>
+        <div style={styles.eyebrow}>
+          UNIVERSAL AI CREATION PLATFORM
+        </div>
 
-        <h1 style={styles.heroTitle}>
-          {BRAND.slogan}
-        </h1>
+        <h1 style={styles.heroTitle}>{BRAND.slogan}</h1>
 
         <p style={styles.heroText}>
           Create flyers, websites, logos, images, apps and more
@@ -152,6 +196,56 @@ export default function Home() {
             style and information you want on the flyer.
           </div>
 
+          <div style={styles.uploadBox}>
+            <div style={styles.uploadTitle}>
+              📸 Add your photo or logo
+            </div>
+
+            <div style={styles.uploadText}>
+              Upload an image that BOMBA AI should use in your flyer.
+            </div>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageUpload}
+              style={styles.hiddenInput}
+            />
+
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              style={styles.uploadButton}
+            >
+              📷 {uploadedImage ? "Change Photo / Logo" : "Upload Photo / Logo"}
+            </button>
+
+            {uploadedImage && (
+              <div style={styles.uploadPreview}>
+                <img
+                  src={uploadedImage}
+                  alt="Uploaded photo or logo"
+                  style={styles.previewImage}
+                />
+
+                <div style={styles.uploadInfo}>
+                  <div style={styles.uploadedName}>
+                    {uploadedName || "Uploaded image"}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={removeUploadedImage}
+                    style={styles.removeButton}
+                  >
+                    ✕ Remove
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <button
             onClick={generateFlyer}
             disabled={loading}
@@ -171,21 +265,21 @@ export default function Home() {
           </button>
 
           {error && (
-            <div style={styles.error}>
-              {error}
-            </div>
+            <div style={styles.error}>{error}</div>
           )}
         </div>
 
         {loading && (
           <div style={styles.loadingCard}>
             <div style={styles.loadingLogo}>TB</div>
+
             <h3 style={styles.loadingTitle}>
               BOMBA AI is creating your flyer
             </h3>
+
             <p style={styles.loadingText}>
-              Understanding your request → designing the
-              composition → generating the image
+              Understanding your request → using your uploaded
+              image → designing the composition → generating the flyer
             </p>
           </div>
         )}
@@ -195,6 +289,7 @@ export default function Home() {
             <div style={styles.resultHeader}>
               <div>
                 <div style={styles.smallGold}>RESULT</div>
+
                 <h2 style={styles.resultTitle}>
                   Your BOMBA Flyer
                 </h2>
@@ -237,6 +332,7 @@ export default function Home() {
 
         <div>
           <strong>BOMBA AI</strong>
+
           <div style={styles.footerText}>
             {BRAND.tagline}
           </div>
@@ -251,8 +347,7 @@ const styles = {
     minHeight: "100vh",
     background: "#050505",
     color: "#fff",
-    fontFamily:
-      "Arial, Helvetica, sans-serif",
+    fontFamily: "Arial, Helvetica, sans-serif",
     paddingBottom: 50,
   },
 
@@ -260,7 +355,7 @@ const styles = {
     width: "100%",
     maxWidth: 1100,
     margin: "0 auto",
-    padding: "18px 18px",
+    padding: "18px",
     boxSizing: "border-box",
     display: "flex",
     alignItems: "center",
@@ -452,6 +547,87 @@ const styles = {
     fontSize: 11,
     lineHeight: 1.5,
     marginTop: 9,
+  },
+
+  uploadBox: {
+    marginTop: 18,
+    padding: 16,
+    borderRadius: 14,
+    background: "#090909",
+    border: "1px dashed #3a3a3a",
+  },
+
+  uploadTitle: {
+    fontSize: 14,
+    fontWeight: 900,
+    color: "#fff",
+  },
+
+  uploadText: {
+    marginTop: 5,
+    color: "#777",
+    fontSize: 11,
+    lineHeight: 1.5,
+  },
+
+  hiddenInput: {
+    display: "none",
+  },
+
+  uploadButton: {
+    width: "100%",
+    marginTop: 13,
+    padding: 13,
+    borderRadius: 11,
+    border: "1px solid #3a3a3a",
+    background: "#111",
+    color: "#FFD43B",
+    fontWeight: 900,
+    fontSize: 13,
+    cursor: "pointer",
+  },
+
+  uploadPreview: {
+    marginTop: 14,
+    display: "flex",
+    gap: 12,
+    alignItems: "center",
+    padding: 10,
+    background: "#050505",
+    borderRadius: 12,
+    border: "1px solid #242424",
+  },
+
+  previewImage: {
+    width: 70,
+    height: 70,
+    objectFit: "cover",
+    borderRadius: 9,
+    display: "block",
+  },
+
+  uploadInfo: {
+    minWidth: 0,
+    flex: 1,
+  },
+
+  uploadedName: {
+    color: "#ccc",
+    fontSize: 12,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+
+  removeButton: {
+    marginTop: 8,
+    border: "none",
+    background: "transparent",
+    color: "#ff8585",
+    padding: 0,
+    fontSize: 11,
+    fontWeight: 800,
+    cursor: "pointer",
   },
 
   generateButton: {
