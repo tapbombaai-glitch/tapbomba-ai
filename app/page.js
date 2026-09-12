@@ -15,10 +15,12 @@ const FEATURES = [
   { icon: "🎨", name: "Flyer" },
   { icon: "✦", name: "Logo" },
   { icon: "🖼️", name: "Image" },
-  { icon: "📱", name: "App" },
+  { icon: "🛠️", name: "Universal Builder" },
 ];
 
 export default function Home() {
+  const [activeFeature, setActiveFeature] = useState("Flyer");
+
   const [prompt, setPrompt] = useState("");
   const [image, setImage] = useState("");
   const [uploadedImage, setUploadedImage] = useState("");
@@ -27,6 +29,8 @@ export default function Home() {
   const [photoPosition, setPhotoPosition] = useState("center");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const [builderPrompt, setBuilderPrompt] = useState("");
 
   const fileInputRef = useRef(null);
 
@@ -130,19 +134,50 @@ export default function Home() {
     document.body.removeChild(link);
   }
 
+  function selectFeature(name) {
+    if (name === "Universal Builder") {
+      setActiveFeature("Universal Builder");
+      setError("");
+      return;
+    }
+
+    if (name === "Flyer") {
+      setActiveFeature("Flyer");
+      setError("");
+      return;
+    }
+
+    setError(`${name} is coming next. We're building BOMBA AI one feature at a time.`);
+  }
+
   return (
     <main style={styles.page}>
       <header style={styles.header}>
-        <div style={styles.brand}>
-          <div style={styles.logo}>{BRAND.short}</div>
+        <button
+          type="button"
+          onClick={() => {
+            setActiveFeature("Flyer");
+            setError("");
+          }}
+          style={styles.brandButton}
+        >
+          <div style={styles.brand}>
+            <div style={styles.logo}>{BRAND.short}</div>
 
-          <div>
-            <div style={styles.brandName}>{BRAND.name}</div>
-            <div style={styles.tagline}>{BRAND.tagline}</div>
+            <div>
+              <div style={styles.brandName}>{BRAND.name}</div>
+              <div style={styles.tagline}>{BRAND.tagline}</div>
+            </div>
           </div>
-        </div>
+        </button>
 
-        <button style={styles.menuButton}>☰</button>
+        <button
+          type="button"
+          style={styles.menuButton}
+          onClick={() => setError("Dashboard menu is coming next.")}
+        >
+          ☰
+        </button>
       </header>
 
       <section style={styles.hero}>
@@ -158,249 +193,414 @@ export default function Home() {
         </p>
 
         <div style={styles.featureRow}>
-          {FEATURES.map((feature) => (
-            <div key={feature.name} style={styles.feature}>
-              <div style={styles.featureIcon}>{feature.icon}</div>
-              <div style={styles.featureName}>{feature.name}</div>
-            </div>
-          ))}
+          {FEATURES.map((feature) => {
+            const isActive =
+              activeFeature === feature.name;
+
+            return (
+              <button
+                key={feature.name}
+                type="button"
+                onClick={() => selectFeature(feature.name)}
+                style={{
+                  ...styles.feature,
+                  ...(isActive ? styles.featureActive : {}),
+                }}
+              >
+                <div style={styles.featureIcon}>
+                  {feature.icon}
+                </div>
+
+                <div style={styles.featureName}>
+                  {feature.name}
+                </div>
+              </button>
+            );
+          })}
         </div>
       </section>
 
-      <section style={styles.workspace}>
-        <div style={styles.sectionTop}>
-          <div>
-            <div style={styles.smallGold}>CREATE</div>
-            <h2 style={styles.sectionTitle}>
-              AI Flyer Generator
+      {activeFeature === "Universal Builder" ? (
+        <section style={styles.workspace}>
+          <div style={styles.sectionTop}>
+            <div>
+              <div style={styles.smallGold}>
+                BUILD
+              </div>
+
+              <h2 style={styles.sectionTitle}>
+                Universal Builder
+              </h2>
+            </div>
+
+            <div style={styles.liveBadge}>
+              <span style={styles.liveDot}></span>
+              BUILDER READY
+            </div>
+          </div>
+
+          <div style={styles.builderCard}>
+            <div style={styles.builderLogo}>
+              TB
+            </div>
+
+            <h2 style={styles.builderTitle}>
+              Build anything with BOMBA AI
             </h2>
-          </div>
 
-          <div style={styles.liveBadge}>
-            <span style={styles.liveDot}></span>
-            AI READY
-          </div>
-        </div>
+            <p style={styles.builderDescription}>
+              Describe what you want to build. BOMBA AI will
+              plan it, build it gradually, save your progress,
+              and continue from where it stopped.
+            </p>
 
-        <div style={styles.card}>
-          <label style={styles.label}>
-            Describe your flyer
-          </label>
+            <label style={styles.label}>
+              What do you want to build?
+            </label>
 
-          <textarea
-            value={prompt}
-            onChange={(e) => {
-              setPrompt(e.target.value);
-              setError("");
-            }}
-            placeholder="Example: Create a premium birthday flyer for Kingsley Suoye, black and gold design, elegant celebration, Saturday 20 September..."
-            style={styles.textarea}
-          />
-
-          <div style={styles.helper}>
-            Be specific about the event, business, colors, text,
-            style and information you want on the flyer.
-          </div>
-
-          <div style={styles.uploadBox}>
-            <div style={styles.uploadTitle}>
-              📸 Add your photo or logo
-            </div>
-
-            <div style={styles.uploadText}>
-              Upload an image that BOMBA AI should use in your flyer.
-            </div>
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleImageUpload}
-              style={styles.hiddenInput}
+            <textarea
+              value={builderPrompt}
+              onChange={(e) =>
+                setBuilderPrompt(e.target.value)
+              }
+              placeholder="Example: Build a school management system for students, teachers, classes and school administrators..."
+              style={styles.textarea}
             />
 
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
-              style={styles.uploadButton}
+              onClick={() => {
+                if (!builderPrompt.trim()) {
+                  setError(
+                    "Describe what you want BOMBA AI to build."
+                  );
+                  return;
+                }
+
+                setError(
+                  "Your project description is ready. The Universal Builder build system will be connected next."
+                );
+              }}
+              style={styles.generateButton}
             >
-              📷{" "}
-              {uploadedImage
-                ? "Change Photo / Logo"
-                : "Upload Photo / Logo"}
+              🚀 START BUILDING
             </button>
 
-            {uploadedImage && (
-              <>
-                <div style={styles.uploadPreview}>
-                  <img
-                    src={uploadedImage}
-                    alt="Uploaded photo or logo"
-                    style={styles.previewImage}
-                  />
+            {error && (
+              <div style={styles.error}>
+                {error}
+              </div>
+            )}
 
-                  <div style={styles.uploadInfo}>
-                    <div style={styles.uploadedName}>
-                      {uploadedName || "Uploaded image"}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={removeUploadedImage}
-                      style={styles.removeButton}
-                    >
-                      ✕ Remove
-                    </button>
+            <div style={styles.builderSteps}>
+              <div style={styles.builderStep}>
+                <div style={styles.stepNumber}>1</div>
+                <div>
+                  <strong>Describe</strong>
+                  <div style={styles.stepText}>
+                    Tell BOMBA what you want.
                   </div>
                 </div>
-
-                <div style={styles.controlsBox}>
-                  <div style={styles.controlGroup}>
-                    <div style={styles.controlTitle}>
-                      📐 Photo Size
-                    </div>
-
-                    <div style={styles.optionRow}>
-                      {[
-                        ["small", "Small"],
-                        ["medium", "Medium"],
-                        ["large", "Large"],
-                        ["full", "Full"],
-                      ].map(([value, label]) => (
-                        <button
-                          key={value}
-                          type="button"
-                          onClick={() => setPhotoSize(value)}
-                          style={{
-                            ...styles.optionButton,
-                            ...(photoSize === value
-                              ? styles.optionButtonActive
-                              : {}),
-                          }}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div style={styles.controlGroup}>
-                    <div style={styles.controlTitle}>
-                      ↔️ Photo Position
-                    </div>
-
-                    <div style={styles.optionRow}>
-                      {[
-                        ["left", "Left"],
-                        ["center", "Center"],
-                        ["right", "Right"],
-                      ].map(([value, label]) => (
-                        <button
-                          key={value}
-                          type="button"
-                          onClick={() => setPhotoPosition(value)}
-                          style={{
-                            ...styles.optionButton,
-                            ...(photoPosition === value
-                              ? styles.optionButtonActive
-                              : {}),
-                          }}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div style={styles.controlNote}>
-                    ✓ BOMBA AI will use your uploaded image as
-                    the photo reference instead of creating a
-                    different person.
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-
-          <button
-            onClick={generateFlyer}
-            disabled={loading}
-            style={{
-              ...styles.generateButton,
-              opacity: loading ? 0.65 : 1,
-            }}
-          >
-            {loading ? (
-              <>
-                <span style={styles.spinner}></span>
-                BOMBA IS CREATING...
-              </>
-            ) : (
-              <>✨ GENERATE FLYER</>
-            )}
-          </button>
-
-          {error && <div style={styles.error}>{error}</div>}
-        </div>
-
-        {loading && (
-          <div style={styles.loadingCard}>
-            <div style={styles.loadingLogo}>TB</div>
-
-            <h3 style={styles.loadingTitle}>
-              BOMBA AI is creating your flyer
-            </h3>
-
-            <p style={styles.loadingText}>
-              Understanding your request → using your uploaded
-              image → applying your photo settings → designing
-              the composition → generating the flyer
-            </p>
-          </div>
-        )}
-
-        {image && !loading && (
-          <div style={styles.resultSection}>
-            <div style={styles.resultHeader}>
-              <div>
-                <div style={styles.smallGold}>RESULT</div>
-
-                <h2 style={styles.resultTitle}>
-                  Your BOMBA Flyer
-                </h2>
               </div>
 
-              <button
-                onClick={downloadImage}
-                style={styles.downloadButton}
-              >
-                ↓ Download
-              </button>
+              <div style={styles.builderStep}>
+                <div style={styles.stepNumber}>2</div>
+                <div>
+                  <strong>Plan</strong>
+                  <div style={styles.stepText}>
+                    BOMBA creates the project plan.
+                  </div>
+                </div>
+              </div>
+
+              <div style={styles.builderStep}>
+                <div style={styles.stepNumber}>3</div>
+                <div>
+                  <strong>Build</strong>
+                  <div style={styles.stepText}>
+                    The project is built gradually.
+                  </div>
+                </div>
+              </div>
+
+              <div style={styles.builderStep}>
+                <div style={styles.stepNumber}>4</div>
+                <div>
+                  <strong>Save</strong>
+                  <div style={styles.stepText}>
+                    Your progress stays safely stored.
+                  </div>
+                </div>
+              </div>
+
+              <div style={styles.builderStep}>
+                <div style={styles.stepNumber}>5</div>
+                <div>
+                  <strong>Continue</strong>
+                  <div style={styles.stepText}>
+                    Future sessions continue from where you stopped.
+                  </div>
+                </div>
+              </div>
+
+              <div style={styles.builderStep}>
+                <div style={styles.stepNumber}>6</div>
+                <div>
+                  <strong>Control</strong>
+                  <div style={styles.stepText}>
+                    Owner and admin controls come later.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : (
+        <section style={styles.workspace}>
+          <div style={styles.sectionTop}>
+            <div>
+              <div style={styles.smallGold}>
+                CREATE
+              </div>
+
+              <h2 style={styles.sectionTitle}>
+                AI Flyer Generator
+              </h2>
             </div>
 
-            <div style={styles.imageFrame}>
-              <img
-                src={image}
-                alt="BOMBA AI generated flyer"
-                style={styles.generatedImage}
+            <div style={styles.liveBadge}>
+              <span style={styles.liveDot}></span>
+              AI READY
+            </div>
+          </div>
+
+          <div style={styles.card}>
+            <label style={styles.label}>
+              Describe your flyer
+            </label>
+
+            <textarea
+              value={prompt}
+              onChange={(e) => {
+                setPrompt(e.target.value);
+                setError("");
+              }}
+              placeholder="Example: Create a premium birthday flyer for Kingsley Suoye, black and gold design, elegant celebration, Saturday 20 September..."
+              style={styles.textarea}
+            />
+
+            <div style={styles.helper}>
+              Be specific about the event, business, colors, text,
+              style and information you want on the flyer.
+            </div>
+
+            <div style={styles.uploadBox}>
+              <div style={styles.uploadTitle}>
+                📸 Add your photo or logo
+              </div>
+
+              <div style={styles.uploadText}>
+                Upload an image that BOMBA AI should use in your flyer.
+              </div>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                style={styles.hiddenInput}
               />
+
+              <button
+                type="button"
+                onClick={() =>
+                  fileInputRef.current?.click()
+                }
+                style={styles.uploadButton}
+              >
+                📷{" "}
+                {uploadedImage
+                  ? "Change Photo / Logo"
+                  : "Upload Photo / Logo"}
+              </button>
+
+              {uploadedImage && (
+                <>
+                  <div style={styles.uploadPreview}>
+                    <img
+                      src={uploadedImage}
+                      alt="Uploaded photo or logo"
+                      style={styles.previewImage}
+                    />
+
+                    <div style={styles.uploadInfo}>
+                      <div style={styles.uploadedName}>
+                        {uploadedName || "Uploaded image"}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={removeUploadedImage}
+                        style={styles.removeButton}
+                      >
+                        ✕ Remove
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style={styles.controlsBox}>
+                    <div style={styles.controlGroup}>
+                      <div style={styles.controlTitle}>
+                        📐 Photo Size
+                      </div>
+
+                      <div style={styles.optionRow}>
+                        {[
+                          ["small", "Small"],
+                          ["medium", "Medium"],
+                          ["large", "Large"],
+                          ["full", "Full"],
+                        ].map(([value, label]) => (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() =>
+                              setPhotoSize(value)
+                            }
+                            style={{
+                              ...styles.optionButton,
+                              ...(photoSize === value
+                                ? styles.optionButtonActive
+                                : {}),
+                            }}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div style={styles.controlGroup}>
+                      <div style={styles.controlTitle}>
+                        ↔️ Photo Position
+                      </div>
+
+                      <div style={styles.optionRow}>
+                        {[
+                          ["left", "Left"],
+                          ["center", "Center"],
+                          ["right", "Right"],
+                        ].map(([value, label]) => (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() =>
+                              setPhotoPosition(value)
+                            }
+                            style={{
+                              ...styles.optionButton,
+                              ...(photoPosition === value
+                                ? styles.optionButtonActive
+                                : {}),
+                            }}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div style={styles.controlNote}>
+                      ✓ BOMBA AI will use your uploaded image as
+                      the photo reference instead of creating a
+                      different person.
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             <button
-              onClick={() => {
-                setImage("");
-                window.scrollTo({
-                  top: 0,
-                  behavior: "smooth",
-                });
+              onClick={generateFlyer}
+              disabled={loading}
+              style={{
+                ...styles.generateButton,
+                opacity: loading ? 0.65 : 1,
               }}
-              style={styles.createAnother}
             >
-              + Create Another Flyer
+              {loading ? (
+                <>
+                  <span style={styles.spinner}></span>
+                  BOMBA IS CREATING...
+                </>
+              ) : (
+                <>✨ GENERATE FLYER</>
+              )}
             </button>
+
+            {error && <div style={styles.error}>{error}</div>}
           </div>
-        )}
-      </section>
+
+          {loading && (
+            <div style={styles.loadingCard}>
+              <div style={styles.loadingLogo}>TB</div>
+
+              <h3 style={styles.loadingTitle}>
+                BOMBA AI is creating your flyer
+              </h3>
+
+              <p style={styles.loadingText}>
+                Understanding your request → using your uploaded
+                image → applying your photo settings → designing
+                the composition → generating the flyer
+              </p>
+            </div>
+          )}
+
+          {image && !loading && (
+            <div style={styles.resultSection}>
+              <div style={styles.resultHeader}>
+                <div>
+                  <div style={styles.smallGold}>RESULT</div>
+
+                  <h2 style={styles.resultTitle}>
+                    Your BOMBA Flyer
+                  </h2>
+                </div>
+
+                <button
+                  onClick={downloadImage}
+                  style={styles.downloadButton}
+                >
+                  ↓ Download
+                </button>
+              </div>
+
+              <div style={styles.imageFrame}>
+                <img
+                  src={image}
+                  alt="BOMBA AI generated flyer"
+                  style={styles.generatedImage}
+                />
+              </div>
+
+              <button
+                onClick={() => {
+                  setImage("");
+
+                  window.scrollTo({
+                    top: 0,
+                    behavior: "smooth",
+                  });
+                }}
+                style={styles.createAnother}
+              >
+                + Create Another Flyer
+              </button>
+            </div>
+          )}
+        </section>
+      )}
 
       <footer style={styles.footer}>
         <div style={styles.footerLogo}>TB</div>
@@ -440,6 +640,15 @@ const styles = {
     backdropFilter: "blur(12px)",
   },
 
+  brandButton: {
+    border: "none",
+    background: "transparent",
+    padding: 0,
+    color: "#ffffff",
+    cursor: "pointer",
+    textAlign: "left",
+  },
+
   brand: {
     display: "flex",
     alignItems: "center",
@@ -457,7 +666,8 @@ const styles = {
     justifyContent: "center",
     fontWeight: 900,
     fontSize: "16px",
-    boxShadow: "0 0 22px rgba(255,212,59,0.18)",
+    boxShadow:
+      "0 0 22px rgba(255,212,59,0.18)",
   },
 
   brandName: {
@@ -524,7 +734,7 @@ const styles = {
       "repeat(5, minmax(0, 1fr))",
     gap: "7px",
     marginTop: "28px",
-    maxWidth: "600px",
+    maxWidth: "700px",
     marginLeft: "auto",
     marginRight: "auto",
   },
@@ -534,6 +744,16 @@ const styles = {
     background: "#0d0d0d",
     borderRadius: "12px",
     padding: "10px 4px",
+    color: "#ffffff",
+    cursor: "pointer",
+    minWidth: 0,
+  },
+
+  featureActive: {
+    border: "1px solid #FFD43B",
+    background: "#171406",
+    boxShadow:
+      "0 0 18px rgba(255,212,59,0.08)",
   },
 
   featureIcon: {
@@ -544,6 +764,7 @@ const styles = {
     marginTop: "5px",
     fontSize: "9px",
     color: "#bdbdbd",
+    lineHeight: 1.25,
   },
 
   workspace: {
@@ -596,7 +817,88 @@ const styles = {
     border: "1px solid #242424",
     borderRadius: "18px",
     padding: "18px",
-    boxShadow: "0 15px 50px rgba(0,0,0,0.25)",
+    boxShadow:
+      "0 15px 50px rgba(0,0,0,0.25)",
+  },
+
+  builderCard: {
+    background: "#0d0d0d",
+    border: "1px solid #242424",
+    borderRadius: "18px",
+    padding: "22px 18px",
+    boxShadow:
+      "0 15px 50px rgba(0,0,0,0.25)",
+    textAlign: "center",
+  },
+
+  builderLogo: {
+    width: "58px",
+    height: "58px",
+    margin: "0 auto 15px",
+    borderRadius: "14px",
+    background: "#FFD43B",
+    color: "#000000",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: 950,
+    fontSize: "19px",
+    boxShadow:
+      "0 0 25px rgba(255,212,59,0.14)",
+  },
+
+  builderTitle: {
+    margin: 0,
+    fontSize: "24px",
+    lineHeight: 1.15,
+  },
+
+  builderDescription: {
+    color: "#929292",
+    fontSize: "12px",
+    lineHeight: 1.65,
+    maxWidth: "570px",
+    margin: "11px auto 22px",
+  },
+
+  builderSteps: {
+    marginTop: "25px",
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(2, minmax(0, 1fr))",
+    gap: "9px",
+    textAlign: "left",
+  },
+
+  builderStep: {
+    display: "flex",
+    gap: "10px",
+    padding: "12px",
+    border: "1px solid #222222",
+    background: "#090909",
+    borderRadius: "11px",
+    fontSize: "11px",
+  },
+
+  stepNumber: {
+    flexShrink: 0,
+    width: "25px",
+    height: "25px",
+    borderRadius: "8px",
+    background: "#211d08",
+    color: "#FFD43B",
+    border: "1px solid #4b411d",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: 900,
+  },
+
+  stepText: {
+    color: "#777777",
+    marginTop: "3px",
+    lineHeight: 1.4,
+    fontSize: "10px",
   },
 
   label: {
@@ -604,6 +906,7 @@ const styles = {
     fontSize: "13px",
     fontWeight: 800,
     marginBottom: "9px",
+    textAlign: "left",
   },
 
   textarea: {
@@ -626,6 +929,7 @@ const styles = {
     fontSize: "11px",
     lineHeight: 1.5,
     marginTop: "8px",
+    textAlign: "left",
   },
 
   uploadBox: {
@@ -634,6 +938,7 @@ const styles = {
     background: "#090909",
     borderRadius: "14px",
     padding: "15px",
+    textAlign: "left",
   },
 
   uploadTitle: {
@@ -765,7 +1070,8 @@ const styles = {
     fontWeight: 950,
     fontSize: "13px",
     cursor: "pointer",
-    boxShadow: "0 8px 28px rgba(255,212,59,0.14)",
+    boxShadow:
+      "0 8px 28px rgba(255,212,59,0.14)",
   },
 
   spinner: {
@@ -777,7 +1083,8 @@ const styles = {
     borderRadius: "50%",
     marginRight: "8px",
     verticalAlign: "-2px",
-    animation: "bombaSpin 0.8s linear infinite",
+    animation:
+      "bombaSpin 0.8s linear infinite",
   },
 
   error: {
@@ -789,6 +1096,7 @@ const styles = {
     color: "#ffaaaa",
     fontSize: "12px",
     lineHeight: 1.5,
+    textAlign: "left",
   },
 
   loadingCard: {
