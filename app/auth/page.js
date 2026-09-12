@@ -15,6 +15,7 @@ export default function AuthPage() {
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -28,8 +29,13 @@ export default function AuthPage() {
       return;
     }
 
-    if (!email.trim() || !password) {
-      setMessage("Please enter your email and password.");
+    if (!email.trim()) {
+      setMessage("Please enter your email address.");
+      return;
+    }
+
+    if (mode !== "forgot" && !password) {
+      setMessage("Please enter your password.");
       return;
     }
 
@@ -47,9 +53,15 @@ export default function AuthPage() {
           return;
         }
 
-        window.location.href = "/";
-      } else {
-        const { error } = await supabase.auth.signUp({
+        setMessage("Login successful. Redirecting...");
+
+        setTimeout(() => {
+          window.location.href = "/";
+        }, 500);
+      }
+
+      if (mode === "signup") {
+        const { data, error } = await supabase.auth.signUp({
           email: email.trim(),
           password,
         });
@@ -59,8 +71,34 @@ export default function AuthPage() {
           return;
         }
 
+        if (data?.session) {
+          setMessage("Account created successfully. Redirecting...");
+
+          setTimeout(() => {
+            window.location.href = "/";
+          }, 700);
+        } else {
+          setMessage(
+            "Account created successfully. Please check your email to confirm your account."
+          );
+        }
+      }
+
+      if (mode === "forgot") {
+        const { error } = await supabase.auth.resetPasswordForEmail(
+          email.trim(),
+          {
+            redirectTo: `${window.location.origin}/auth?mode=reset`,
+          }
+        );
+
+        if (error) {
+          setMessage(error.message);
+          return;
+        }
+
         setMessage(
-          "Account created successfully. Check your email if confirmation is required."
+          "Password reset email sent. Please check your email inbox."
         );
       }
     } catch (error) {
@@ -70,6 +108,12 @@ export default function AuthPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function switchMode(nextMode) {
+    setMode(nextMode);
+    setMessage("");
+    setPassword("");
   }
 
   return (
@@ -139,7 +183,11 @@ export default function AuthPage() {
             marginBottom: "18px",
           }}
         >
-          {mode === "login" ? "Welcome back" : "Create your account"}
+          {mode === "login"
+            ? "Welcome back"
+            : mode === "signup"
+            ? "Create your account"
+            : "Reset your password"}
         </h2>
 
         <form onSubmit={handleSubmit}>
@@ -161,23 +209,53 @@ export default function AuthPage() {
             }}
           />
 
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            style={{
-              width: "100%",
-              boxSizing: "border-box",
-              padding: "14px",
-              marginBottom: "14px",
-              borderRadius: "10px",
-              border: "1px solid #333",
-              background: "#151515",
-              color: "#fff",
-              fontSize: "16px",
-            }}
-          />
+          {mode !== "forgot" && (
+            <div
+              style={{
+                position: "relative",
+                marginBottom: "14px",
+              }}
+            >
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="Password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  padding: "14px 48px 14px 14px",
+                  borderRadius: "10px",
+                  border: "1px solid #333",
+                  background: "#151515",
+                  color: "#fff",
+                  fontSize: "16px",
+                }}
+              />
+
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                aria-label={
+                  showPassword ? "Hide password" : "Show password"
+                }
+                style={{
+                  position: "absolute",
+                  right: "10px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  border: "none",
+                  background: "transparent",
+                  color: "#FFD43B",
+                  fontSize: "20px",
+                  cursor: "pointer",
+                  padding: "6px",
+                }}
+              >
+                {showPassword ? "🙈" : "👁️"}
+              </button>
+            </div>
+          )}
 
           <button
             type="submit"
@@ -198,9 +276,29 @@ export default function AuthPage() {
               ? "Please wait..."
               : mode === "login"
               ? "LOGIN"
-              : "CREATE ACCOUNT"}
+              : mode === "signup"
+              ? "CREATE ACCOUNT"
+              : "SEND RESET EMAIL"}
           </button>
         </form>
+
+        {mode === "login" && (
+          <button
+            type="button"
+            onClick={() => switchMode("forgot")}
+            style={{
+              marginTop: "14px",
+              width: "100%",
+              border: "none",
+              background: "transparent",
+              color: "#FFD43B",
+              cursor: "pointer",
+              fontSize: "14px",
+            }}
+          >
+            Forgot password?
+          </button>
+        )}
 
         {message && (
           <p
@@ -216,10 +314,9 @@ export default function AuthPage() {
 
         <button
           type="button"
-          onClick={() => {
-            setMode(mode === "login" ? "signup" : "login");
-            setMessage("");
-          }}
+          onClick={() =>
+            switchMode(mode === "login" ? "signup" : "login")
+          }
           style={{
             marginTop: "18px",
             width: "100%",
@@ -235,6 +332,25 @@ export default function AuthPage() {
             ? "Don't have an account? Sign up"
             : "Already have an account? Login"}
         </button>
+
+        {mode === "forgot" && (
+          <button
+            type="button"
+            onClick={() => switchMode("login")}
+            style={{
+              marginTop: "12px",
+              width: "100%",
+              padding: "12px",
+              border: "1px solid #333",
+              borderRadius: "10px",
+              background: "transparent",
+              color: "#aaa",
+              cursor: "pointer",
+            }}
+          >
+            Back to Login
+          </button>
+        )}
       </div>
     </main>
   );
