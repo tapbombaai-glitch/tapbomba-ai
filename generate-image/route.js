@@ -1,0 +1,1 @@
+add generate-image api route
