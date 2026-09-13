@@ -365,11 +365,14 @@ export default function Home() {
        * so normal users cannot receive protected source files.
        */
       const safeProject = {
-        ...buildData.project,
-        project_files: [],
-      };
+  ...builderProject,
+  ...buildData.project,
+  original_request:
+    builderProject.original_request,
+  project_files: [],
+};
 
-      setBuilderProject(safeProject);
+setBuilderProject(safeProject);
 
       const stageName =
         buildData?.stage?.stageName ||
