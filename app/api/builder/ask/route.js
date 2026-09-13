@@ -11,11 +11,8 @@ const openai = new OpenAI({
 
 export async function POST(req) {
   try {
-    const supabaseUrl =
-      process.env.NEXT_PUBLIC_SUPABASE_URL;
-
-    const supabaseAnonKey =
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseAnonKey) {
       return NextResponse.json(
@@ -40,23 +37,16 @@ export async function POST(req) {
 
     if (!question) {
       return NextResponse.json(
-        {
-          error:
-            "Type or speak a question for BOMBA AI.",
-        },
+        { error: "Type or speak a question for BOMBA AI." },
         { status: 400 }
       );
     }
 
-    const authHeader =
-      req.headers.get("authorization");
+    const authHeader = req.headers.get("authorization");
 
     if (!authHeader) {
       return NextResponse.json(
-        {
-          error:
-            "Please log in before using Ask BOMBA AI.",
-        },
+        { error: "Please log in before using Ask BOMBA AI." },
         { status: 401 }
       );
     }
@@ -80,91 +70,55 @@ export async function POST(req) {
 
     if (userError || !user) {
       return NextResponse.json(
-        {
-          error:
-            "Your login session could not be verified.",
-        },
+        { error: "Your login session could not be verified." },
         { status: 401 }
       );
     }
 
-    const project =
-      body?.project || null;
-
-    const plan =
-      body?.plan || null;
-
-    const contextParts = [];
-
-    if (project) {
-      contextParts.push(
-        `Current project:\n${JSON.stringify(
-          project,
-          null,
-          2
-        )}`
-      );
-    }
-
-    if (plan) {
-      contextParts.push(
-        `Project plan:\n${JSON.stringify(
-          plan,
-          null,
-          2
-        )}`
-      );
-    }
-
     const system = `
-You are BOMBA AI.
+You are BOMBA AI, an independent professional AI assistant.
 
-Help the user understand their project, ask questions,
-solve problems, explain progress, and suggest useful next steps.
+You are NOT the Universal Builder.
+You do NOT receive or use Builder projects, Builder plans, or Builder context.
 
-If a project or build plan is provided, use it.
+Answer the user's question directly and independently.
 
-If there is no project, still answer the user's question normally.
+Help with:
+- questions and explanations
+- business ideas and strategy
+- calculations
+- writing and rewriting
+- marketing and content
+- coding and technical problems
+- practical Nigerian/African business advice
 
 Reply in the same language the user used.
 
-Be clear, useful, and concise.
+Be clear, accurate, practical, and concise.
+Do not invent information.
 `.trim();
 
-    const userContent = [
-      question,
-      contextParts.length
-        ? `\n\n${contextParts.join("\n\n")}`
-        : "",
-    ]
-      .join("")
-      .trim();
-
-    const response =
-      await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        temperature: 0.4,
-        messages: [
-          {
-            role: "system",
-            content: system,
-          },
-          {
-            role: "user",
-            content: userContent,
-          },
-        ],
-      });
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      temperature: 0.4,
+      messages: [
+        {
+          role: "system",
+          content: system,
+        },
+        {
+          role: "user",
+          content: question,
+        },
+      ],
+    });
 
     const answer =
       response.choices?.[0]?.message?.content?.trim();
 
     if (!answer) {
       return NextResponse.json(
-        {
-          error:
-            "BOMBA AI did not return an answer.",
-        },
+        { error: "BOMBA AI did not return an answer." },
         { status: 500 }
       );
     }
@@ -174,10 +128,7 @@ Be clear, useful, and concise.
       answer,
     });
   } catch (error) {
-    console.error(
-      "Ask BOMBA AI API error:",
-      error
-    );
+    console.error("Ask BOMBA AI API error:", error);
 
     return NextResponse.json(
       {
