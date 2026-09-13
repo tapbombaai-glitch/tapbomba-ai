@@ -47,6 +47,7 @@ export default function Home() {
   const [askLoading, setAskLoading] = useState(false);
   const [askError, setAskError] = useState("");
   const [voiceListening, setVoiceListening] = useState(false);
+  const [copyStatus, setCopyStatus] = useState("");
 
   const fileInputRef = useRef(null);
 
@@ -140,6 +141,41 @@ export default function Home() {
     }
   }
 
+  async function getBuilderPlan(project, session) {
+    const planResponse = await fetch(
+      "/api/builder/plan",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          originalRequest: project.original_request,
+        }),
+      }
+    );
+
+    const planData = await planResponse.json();
+
+    if (!planResponse.ok) {
+      throw new Error(
+        planData?.error ||
+          "BOMBA AI could not create the project plan."
+      );
+    }
+
+    const plan = planData?.plan || planData;
+
+    if (!plan?.buildStages?.length) {
+      throw new Error(
+        "BOMBA AI did not return valid build stages."
+      );
+    }
+
+    return plan;
+  }
+
   async function startBuilder() {
     const text = builderPrompt.trim();
 
@@ -215,8 +251,27 @@ export default function Home() {
         );
       }
 
-      setBuilderProject(data.project);
-      setBuilderView("workspace");
+      const project = data.project;
+
+      setBuilderBuildLogs([
+        "🧠 BOMBA AI is understanding your request...",
+        "📋 Creating your real project plan...",
+      ]);
+
+      const plan = await getBuilderPlan(
+        project,
+        session
+      );
+
+      setBuilderProject(project);
+      setBuilderPlan(plan);
+
+      setBuilderBuildLogs((current) => [
+        ...current,
+        `✅ Plan ready: ${plan.buildStages.length} real build stages.`,
+      ]);
+
+      setBuilderView("plan");
     } catch (error) {
       console.error("Builder start error:", error);
 
@@ -233,6 +288,14 @@ export default function Home() {
     if (!builderProject?.id) {
       setBuilderBuildError(
         "No builder project is available."
+      );
+      setBuilderView("build");
+      return;
+    }
+
+    if (buildCompleted) {
+      setBuilderBuildError(
+        "This project has already completed all planned build stages."
       );
       setBuilderView("build");
       return;
@@ -286,37 +349,10 @@ export default function Home() {
           "📋 Creating the real project plan...",
         ]);
 
-        const planResponse = await fetch(
-          "/api/builder/plan",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${session.access_token}`,
-            },
-            body: JSON.stringify({
-              originalRequest:
-                builderProject.original_request,
-            }),
-          }
+        plan = await getBuilderPlan(
+          builderProject,
+          session
         );
-
-        const planData = await planResponse.json();
-
-        if (!planResponse.ok) {
-          throw new Error(
-            planData?.error ||
-              "BOMBA AI could not create the project plan."
-          );
-        }
-
-        plan = planData?.plan || planData;
-
-        if (!plan?.buildStages?.length) {
-          throw new Error(
-            "BOMBA AI did not return valid build stages."
-          );
-        }
 
         setBuilderPlan(plan);
 
@@ -326,12 +362,12 @@ export default function Home() {
         ]);
       }
 
-      const currentStage =
+      const requestedNextStage =
         Number(builderProject.current_stage || 0) + 1;
 
       setBuilderBuildLogs((current) => [
         ...current,
-        `🏗️ Starting real build stage ${currentStage}...`,
+        `🏗️ Starting real build stage ${requestedNextStage}...`,
       ]);
 
       const buildResponse = await fetch(
@@ -366,19 +402,33 @@ export default function Home() {
         );
       }
 
+      const returnedFiles =
+        Array.isArray(
+          buildData?.project?.project_files
+        )
+          ? buildData.project.project_files
+          : Array.isArray(
+              builderProject?.project_files
+            )
+          ? builderProject.project_files
+          : [];
+
       const safeProject = {
         ...builderProject,
         ...buildData.project,
         original_request:
           builderProject.original_request,
-        project_files: [],
+        project_files: returnedFiles,
       };
 
       setBuilderProject(safeProject);
 
       const stageName =
         buildData?.stage?.stageName ||
-        `Stage ${currentStage}`;
+        `Stage ${
+          buildData?.project?.current_stage ||
+          requestedNextStage
+        }`;
 
       const stageSummary =
         buildData?.stage?.summary ||
@@ -407,7 +457,7 @@ export default function Home() {
     }
   }
 
-    async function revealAskAnswerGradually(text) {
+  async function revealAskAnswerGradually(text) {
     setAskAnswer("");
 
     const words = text.split(/(\s+)/);
@@ -435,16 +485,10 @@ export default function Home() {
       return;
     }
 
-    if (!builderProject?.id) {
-      setAskError(
-        "Start a Universal Builder project first. Ask BOMBA AI uses your project context."
-      );
-      return;
-    }
-
     setAskLoading(true);
     setAskError("");
     setAskAnswer("");
+    setCopyStatus("");
 
     try {
       const supabaseUrl =
@@ -488,10 +532,7 @@ export default function Home() {
             Authorization: `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({
-            projectId: builderProject.id,
             question,
-            project: builderProject,
-            plan: builderPlan,
           }),
         }
       );
@@ -524,6 +565,82 @@ export default function Home() {
       );
     } finally {
       setAskLoading(false);
+    }
+  }
+
+  async function copyAskAnswer() {
+    if (!askAnswer) return;
+
+    try {
+      await navigator.clipboard.writeText(
+        askAnswer
+      );
+
+      setCopyStatus("ANSWER COPIED ✓");
+
+      setTimeout(() => {
+        setCopyStatus("");
+      }, 2000);
+    } catch (error) {
+      console.error("Copy answer error:", error);
+
+      setCopyStatus(
+        "Copy failed. Please select and copy the answer manually."
+      );
+
+      setTimeout(() => {
+        setCopyStatus("");
+      }, 2500);
+    }
+  }
+
+  async function copyCodeFromAnswer() {
+    if (!askAnswer) return;
+
+    const codeBlocks = [];
+    const regex =
+      /```(?:[a-zA-Z0-9_+-]+)?\s*([\s\S]*?)```/g;
+
+    let match;
+
+    while ((match = regex.exec(askAnswer)) !== null) {
+      if (match[1]?.trim()) {
+        codeBlocks.push(match[1].trim());
+      }
+    }
+
+    if (!codeBlocks.length) {
+      setCopyStatus(
+        "No code block found in this answer."
+      );
+
+      setTimeout(() => {
+        setCopyStatus("");
+      }, 2200);
+
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(
+        codeBlocks.join("\n\n")
+      );
+
+      setCopyStatus("CODE COPIED ✓");
+
+      setTimeout(() => {
+        setCopyStatus("");
+      }, 2000);
+    } catch (error) {
+      console.error("Copy code error:", error);
+
+      setCopyStatus(
+        "Copy failed. Please select and copy the code manually."
+      );
+
+      setTimeout(() => {
+        setCopyStatus("");
+      }, 2500);
     }
   }
 
@@ -567,7 +684,10 @@ export default function Home() {
     };
 
     recognition.onerror = (event) => {
-      console.error("Voice recognition error:", event);
+      console.error(
+        "Voice recognition error:",
+        event
+      );
 
       setVoiceListening(false);
 
@@ -590,8 +710,13 @@ export default function Home() {
     try {
       recognition.start();
     } catch (error) {
-      console.error("Voice start error:", error);
+      console.error(
+        "Voice start error:",
+        error
+      );
+
       setVoiceListening(false);
+
       setAskError(
         "Voice input could not be started. Please try again."
       );
@@ -648,6 +773,7 @@ export default function Home() {
     setAskPrompt("");
     setAskAnswer("");
     setAskError("");
+    setCopyStatus("");
     setError("");
   }
 
@@ -735,7 +861,7 @@ export default function Home() {
           style={styles.brandButton}
         >
           <div style={styles.brand}>
-            <div style={styles.logo}>{BRAND.short}</div>
+            <div style={styles.logo}>TB</div>
 
             <div>
               <div style={styles.brandName}>
@@ -907,7 +1033,7 @@ export default function Home() {
               </div>
 
               <h2 style={styles.sectionTitle}>
-                Ask BOMBA AI
+                Ask BOMBA AI anything
               </h2>
             </div>
 
@@ -918,68 +1044,17 @@ export default function Home() {
           </div>
 
           <div style={styles.askCard}>
-            <div style={styles.askLogo}>
-              TB
-            </div>
+            <div style={styles.askLogo}>TB</div>
 
             <h2 style={styles.askTitle}>
-              Ask BOMBA AI anything about your project
+              Ask BOMBA AI anything
             </h2>
 
             <p style={styles.askDescription}>
-              Ask questions, explain changes, understand
-              your build progress, or tell BOMBA AI what
-              you want to change next.
+              Your independent AI assistant for questions,
+              ideas, business, writing, coding, planning
+              and more.
             </p>
-
-            {!builderProject && (
-              <div style={styles.askNotice}>
-                <div style={styles.askNoticeIcon}>
-                  💡
-                </div>
-
-                <div>
-                  <strong>
-                    Start a Universal Builder project first
-                  </strong>
-
-                  <div style={styles.askNoticeText}>
-                    Ask BOMBA AI uses your saved project,
-                    build stage and project plan to give
-                    accurate answers.
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={openBuilder}
-                    style={styles.askBuilderButton}
-                  >
-                    🛠️ OPEN UNIVERSAL BUILDER
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {builderProject && (
-              <div style={styles.askProject}>
-                <div style={styles.boxLabel}>
-                  CURRENT PROJECT
-                </div>
-
-                <div style={styles.askProjectName}>
-                  {builderProject.project_name ||
-                    "BOMBA Project"}
-                </div>
-
-                <div style={styles.askProjectStage}>
-                  Stage {currentStage} of{" "}
-                  {totalStages || "—"} •{" "}
-                  {buildCompleted
-                    ? "Complete"
-                    : "Active"}
-                </div>
-              </div>
-            )}
 
             <label style={styles.label}>
               Your question or instruction
@@ -991,7 +1066,7 @@ export default function Home() {
                 setAskPrompt(e.target.value);
                 setAskError("");
               }}
-              placeholder="Example: What has BOMBA built so far? What should be built next? Add a teacher attendance feature..."
+              placeholder="Ask anything... Example: Give me 5 business ideas I can start in Nigeria with ₦100,000."
               style={styles.askTextarea}
             />
 
@@ -1018,15 +1093,10 @@ export default function Home() {
               <button
                 type="button"
                 onClick={askBombaAI}
-                disabled={
-                  askLoading || !builderProject
-                }
+                disabled={askLoading}
                 style={{
                   ...styles.askButton,
-                  opacity:
-                    askLoading || !builderProject
-                      ? 0.65
-                      : 1,
+                  opacity: askLoading ? 0.65 : 1,
                 }}
               >
                 {askLoading
@@ -1059,8 +1129,7 @@ export default function Home() {
                   </strong>
 
                   <div style={styles.askLoadingText}>
-                    Checking your project context and
-                    preparing the answer.
+                    BOMBA AI is preparing your answer.
                   </div>
                 </div>
               </div>
@@ -1079,7 +1148,7 @@ export default function Home() {
                     </div>
 
                     <div style={styles.answerSubLabel}>
-                      Project Assistant
+                      Independent AI Assistant
                     </div>
                   </div>
                 </div>
@@ -1088,12 +1157,39 @@ export default function Home() {
                   {askAnswer}
                 </div>
 
+                <div style={styles.copyActions}>
+                  <button
+                    type="button"
+                    onClick={copyAskAnswer}
+                    style={styles.copyButton}
+                  >
+                    📋 COPY ANSWER
+                  </button>
+
+                  {askAnswer.includes("```") && (
+                    <button
+                      type="button"
+                      onClick={copyCodeFromAnswer}
+                      style={styles.copyButton}
+                    >
+                      💻 COPY CODE
+                    </button>
+                  )}
+                </div>
+
+                {copyStatus && (
+                  <div style={styles.copyStatus}>
+                    {copyStatus}
+                  </div>
+                )}
+
                 <button
                   type="button"
                   onClick={() => {
                     setAskPrompt("");
                     setAskAnswer("");
                     setAskError("");
+                    setCopyStatus("");
                   }}
                   style={styles.askNewButton}
                 >
@@ -1164,7 +1260,7 @@ export default function Home() {
                 }}
               >
                 {loading
-                  ? "CREATING PROJECT..."
+                  ? "🧠 CREATING PLAN..."
                   : "🚀 START BUILDING"}
               </button>
 
@@ -1318,7 +1414,7 @@ export default function Home() {
                       ? "The planned build stages have been completed."
                       : currentStage
                       ? "BOMBA AI has saved your latest build progress. BUILD will continue from the next saved stage."
-                      : "Your project is saved. Press BUILD to start the real AI build engine."}
+                      : "Your project is saved and your plan is ready. Press BUILD to start the real AI build engine."}
                   </div>
                 </div>
 
@@ -1336,12 +1432,16 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={buildBuilderProject}
-                    disabled={builderBuildLoading}
+                    disabled={
+                      builderBuildLoading ||
+                      buildCompleted
+                    }
                     style={{
                       ...styles.workspaceButtonPrimary,
                       marginTop: 0,
                       opacity:
-                        builderBuildLoading
+                        builderBuildLoading ||
+                        buildCompleted
                           ? 0.65
                           : 1,
                     }}
@@ -1349,7 +1449,7 @@ export default function Home() {
                     {builderBuildLoading
                       ? "🏗️ BUILDING..."
                       : buildCompleted
-                      ? "🚀 BUILD AGAIN"
+                      ? "✅ BUILD COMPLETE"
                       : "🚀 BUILD"}
                   </button>
 
@@ -1376,12 +1476,10 @@ export default function Home() {
 
                 <button
                   type="button"
-                  onClick={() =>
-                    setActiveFeature("ASK BOMBA AI")
-                  }
+                  onClick={openAsk}
                   style={styles.askFromProjectButton}
                 >
-                  💬 ASK BOMBA AI ABOUT THIS PROJECT
+                  💬 OPEN ASK BOMBA AI
                 </button>
 
                 <div style={styles.workspaceInfo}>
@@ -1617,6 +1715,29 @@ export default function Home() {
                           )}
                         </div>
                       )}
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setBuilderView("workspace")
+                      }
+                      style={styles.workspaceButtonPrimary}
+                    >
+                      ← BACK TO WORKSPACE
+                    </button>
+
+                    {!buildCompleted && (
+                      <button
+                        type="button"
+                        onClick={buildBuilderProject}
+                        disabled={builderBuildLoading}
+                        style={styles.workspaceButtonPrimary}
+                      >
+                        {builderBuildLoading
+                          ? "🏗️ BUILDING..."
+                          : "🚀 BUILD THIS PROJECT"}
+                      </button>
+                    )}
                   </>
                 ) : (
                   <div style={styles.fileEmpty}>
@@ -1625,13 +1746,12 @@ export default function Home() {
                     </div>
 
                     <h3>
-                      Plan will be created when BUILD starts
+                      BOMBA AI is preparing your plan
                     </h3>
 
                     <p>
-                      BOMBA AI will create the real plan
-                      from your original request before
-                      building the project.
+                      Your real project plan will appear
+                      here before the build begins.
                     </p>
                   </div>
                 )}
@@ -1641,7 +1761,7 @@ export default function Home() {
                   onClick={() =>
                     setBuilderView("workspace")
                   }
-                  style={styles.workspaceButtonPrimary}
+                  style={styles.workspaceButton}
                 >
                   ← BACK TO WORKSPACE
                 </button>
@@ -1702,11 +1822,6 @@ export default function Home() {
                     <strong>Current stage:</strong>{" "}
                     {currentStage} /{" "}
                     {totalStages || "—"}
-                  </div>
-
-                  <div style={styles.sessionRule}>
-                    <strong>Session:</strong>{" "}
-                    3-minute build window
                   </div>
 
                   <div style={styles.sessionRule}>
@@ -1792,17 +1907,16 @@ export default function Home() {
 
                   {buildCompleted ? (
                     <p>
-                      The build stages are complete. The
-                      working application preview will be
-                      connected to the generated project
-                      files as the Builder is completed.
+                      The build stages are complete.
+                      Generated project files are preserved
+                      and ready for the real preview engine.
                     </p>
                   ) : (
                     <p>
                       BOMBA AI is still building this
-                      application. Preview will become
-                      available as the actual application
-                      is constructed.
+                      application. The preview will use the
+                      generated project files as the Builder
+                      stages are completed.
                     </p>
                   )}
                 </div>
@@ -1854,7 +1968,12 @@ export default function Home() {
                   <div style={styles.lockedFileStatus}>
                     <span>Project files generated:</span>
                     <strong>
-                      {currentStage > 0
+                      {Array.isArray(
+                        builderProject.project_files
+                      ) &&
+                      builderProject.project_files.length
+                        ? " YES"
+                        : currentStage > 0
                         ? " YES"
                         : " NOT YET"}
                     </strong>
@@ -2525,60 +2644,6 @@ const styles = {
     textAlign: "center",
   },
 
-  askNotice: {
-    display: "flex",
-    gap: "11px",
-    alignItems: "flex-start",
-    background: "#111111",
-    border: "1px solid #3b3417",
-    borderRadius: "12px",
-    padding: "13px",
-    marginBottom: "16px",
-    fontSize: "11px",
-  },
-
-  askNoticeIcon: {
-    fontSize: "19px",
-  },
-
-  askNoticeText: {
-    color: "#777777",
-    fontSize: "10px",
-    lineHeight: 1.5,
-    marginTop: "4px",
-  },
-
-  askBuilderButton: {
-    marginTop: "10px",
-    border: "1px solid #5c4e1d",
-    background: "#171406",
-    color: "#FFD43B",
-    borderRadius: "9px",
-    padding: "9px 11px",
-    fontSize: "10px",
-    fontWeight: 900,
-    cursor: "pointer",
-  },
-
-  askProject: {
-    background: "#080808",
-    border: "1px solid #242424",
-    borderRadius: "11px",
-    padding: "12px",
-    marginBottom: "15px",
-  },
-
-  askProjectName: {
-    fontSize: "13px",
-    fontWeight: 900,
-  },
-
-  askProjectStage: {
-    color: "#777777",
-    fontSize: "10px",
-    marginTop: "4px",
-  },
-
   askTextarea: {
     width: "100%",
     minHeight: "135px",
@@ -2716,6 +2781,33 @@ const styles = {
     lineHeight: 1.7,
     whiteSpace: "pre-wrap",
     marginTop: "14px",
+  },
+
+  copyActions: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(2, minmax(0, 1fr))",
+    gap: "8px",
+    marginTop: "14px",
+  },
+
+  copyButton: {
+    border: "1px solid #514719",
+    background: "#171406",
+    color: "#FFD43B",
+    borderRadius: "10px",
+    padding: "11px 8px",
+    fontSize: "10px",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  copyStatus: {
+    marginTop: "8px",
+    textAlign: "center",
+    color: "#FFD43B",
+    fontSize: "10px",
+    fontWeight: 800,
   },
 
   askNewButton: {
