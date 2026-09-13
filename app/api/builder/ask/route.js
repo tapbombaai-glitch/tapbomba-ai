@@ -1,17 +1,15 @@
-async function askBombaAI() {
-  const question = askPrompt.trim();
+import { NextResponse } from "next/server";
+import OpenAI from "openai";
+import { createClient } from "@supabase/supabase-js";
 
-  if (!question) {
-    setAskError(
-      "Type or speak a question for BOMBA AI."
-    );
-    return;
-  }
+export const runtime = "nodejs";
+export const maxDuration = 60;
 
-  setAskLoading(true);
-  setAskError("");
-  setAskAnswer("");
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
+export async function POST(req) {
   try {
     const supabaseUrl =
       process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -20,83 +18,174 @@ async function askBombaAI() {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseAnonKey) {
-      throw new Error(
-        "Supabase is not configured."
+      return NextResponse.json(
+        { error: "Supabase is not configured." },
+        { status: 500 }
       );
     }
 
-    const { createClient } = await import(
-      "@supabase/supabase-js"
-    );
+    if (!process.env.OPENAI_API_KEY) {
+      return NextResponse.json(
+        { error: "OpenAI is not configured." },
+        { status: 500 }
+      );
+    }
+
+    const body = await req.json();
+
+    const question =
+      typeof body?.question === "string"
+        ? body.question.trim()
+        : "";
+
+    if (!question) {
+      return NextResponse.json(
+        {
+          error:
+            "Type or speak a question for BOMBA AI.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const authHeader =
+      req.headers.get("authorization");
+
+    if (!authHeader) {
+      return NextResponse.json(
+        {
+          error:
+            "Please log in before using Ask BOMBA AI.",
+        },
+        { status: 401 }
+      );
+    }
 
     const supabase = createClient(
       supabaseUrl,
-      supabaseAnonKey
-    );
-
-    const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
-
-    if (sessionError || !session) {
-      throw new Error(
-        "Please log in before using Ask BOMBA AI."
-      );
-    }
-
-    const response = await fetch(
-      "/api/builder/ask",
+      supabaseAnonKey,
       {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
+        global: {
+          headers: {
+            Authorization: authHeader,
+          },
         },
-        body: JSON.stringify({
-          projectId:
-            builderProject?.id || null,
-
-          question,
-
-          project:
-            builderProject || null,
-
-          plan:
-            builderPlan || null,
-        }),
       }
     );
 
-    const data = await response.json();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
-    if (!response.ok) {
-      throw new Error(
-        data?.error ||
-          "BOMBA AI could not answer your question."
+    if (userError || !user) {
+      return NextResponse.json(
+        {
+          error:
+            "Your login session could not be verified.",
+        },
+        { status: 401 }
       );
     }
 
-    if (!data?.answer) {
-      throw new Error(
-        "BOMBA AI did not return an answer."
+    const project =
+      body?.project || null;
+
+    const plan =
+      body?.plan || null;
+
+    const contextParts = [];
+
+    if (project) {
+      contextParts.push(
+        `Current project:\n${JSON.stringify(
+          project,
+          null,
+          2
+        )}`
       );
     }
 
-    await revealAskAnswerGradually(
-      data.answer
-    );
-  } catch (err) {
+    if (plan) {
+      contextParts.push(
+        `Project plan:\n${JSON.stringify(
+          plan,
+          null,
+          2
+        )}`
+      );
+    }
+
+    const system = `
+You are BOMBA AI.
+
+Help the user understand their project, ask questions,
+solve problems, explain progress, and suggest useful next steps.
+
+If a project or build plan is provided, use it.
+
+If there is no project, still answer the user's question normally.
+
+Reply in the same language the user used.
+
+Be clear, useful, and concise.
+`.trim();
+
+    const userContent = [
+      question,
+      contextParts.length
+        ? `\n\n${contextParts.join("\n\n")}`
+        : "",
+    ]
+      .join("")
+      .trim();
+
+    const response =
+      await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        temperature: 0.4,
+        messages: [
+          {
+            role: "system",
+            content: system,
+          },
+          {
+            role: "user",
+            content: userContent,
+          },
+        ],
+      });
+
+    const answer =
+      response.choices?.[0]?.message?.content?.trim();
+
+    if (!answer) {
+      return NextResponse.json(
+        {
+          error:
+            "BOMBA AI did not return an answer.",
+        },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      answer,
+    });
+  } catch (error) {
     console.error(
-      "Ask BOMBA AI error:",
-      err
+      "Ask BOMBA AI API error:",
+      error
     );
 
-    setAskError(
-      err?.message ||
-        "Something went wrong while asking BOMBA AI."
+    return NextResponse.json(
+      {
+        error:
+          error?.message ||
+          "Something went wrong while asking BOMBA AI.",
+      },
+      { status: 500 }
     );
-  } finally {
-    setAskLoading(false);
   }
 }
