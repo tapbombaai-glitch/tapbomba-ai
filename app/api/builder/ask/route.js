@@ -1,153 +1,269 @@
-async function askBombaAI() {
-  const question = askPrompt.trim();
+import { NextResponse } from "next/server";
+import OpenAI from "openai";
+import { createClient } from "@supabase/supabase-js";
 
-  if (!question) {
-    setAskError(
-      "Type or speak a question for BOMBA AI."
-    );
-    return;
-  }
+export const runtime = "nodejs";
 
-  setAskLoading(true);
-  setAskError("");
-  setAskAnswer("");
+const supabaseUrl =
+  process.env.NEXT_PUBLIC_SUPABASE_URL;
 
+const supabaseAnonKey =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+const openaiApiKey =
+  process.env.OPENAI_API_KEY;
+
+export async function POST(req) {
   try {
-    const supabaseUrl =
-      process.env.NEXT_PUBLIC_SUPABASE_URL;
-
-    const supabaseAnonKey =
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      throw new Error("Supabase is not configured.");
+    if (
+      !supabaseUrl ||
+      !supabaseAnonKey
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Supabase environment variables are not configured.",
+        },
+        { status: 500 }
+      );
     }
 
-    const { createClient } = await import(
-      "@supabase/supabase-js"
-    );
+    if (!openaiApiKey) {
+      return NextResponse.json(
+        {
+          error:
+            "OpenAI API key is not configured.",
+        },
+        { status: 500 }
+      );
+    }
+
+    const body = await req.json();
+
+    const question =
+      typeof body?.question === "string"
+        ? body.question.trim()
+        : "";
+
+    const projectId =
+      typeof body?.projectId === "string"
+        ? body.projectId.trim()
+        : "";
+
+    const project =
+      body?.project || null;
+
+    const plan =
+      body?.plan || null;
+
+    if (!question) {
+      return NextResponse.json(
+        {
+          error:
+            "Please enter a question for BOMBA AI.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const authHeader =
+      req.headers.get("authorization");
+
+    if (!authHeader) {
+      return NextResponse.json(
+        {
+          error:
+            "Please log in before using ASK BOMBA AI.",
+        },
+        { status: 401 }
+      );
+    }
 
     const supabase = createClient(
       supabaseUrl,
-      supabaseAnonKey
+      supabaseAnonKey,
+      {
+        global: {
+          headers: {
+            Authorization: authHeader,
+          },
+        },
+      }
     );
 
     const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
-    if (sessionError || !session) {
-      throw new Error(
-        "Please log in before using ASK BOMBA AI."
+    if (userError || !user) {
+      return NextResponse.json(
+        {
+          error:
+            "Your login session could not be verified.",
+        },
+        { status: 401 }
       );
     }
 
     /*
-      ASK BOMBA works without a Builder project.
+      ASK BOMBA AI can work without a Builder project.
 
-      If a project is already open, we send it as context.
-      If there is no project, BOMBA simply answers normally.
+      If a projectId is provided, we verify that the
+      project belongs to the logged-in user and use it
+      as additional context.
     */
 
-    let activeProject = builderProject;
-    let activePlan = builderPlan;
+    let savedProject = null;
 
-    /*
-      If there is no project in the current page state,
-      try to load the user's latest saved project.
-
-      This is optional context only.
-      It is NOT required for ASK BOMBA.
-    */
-    if (!activeProject?.id) {
+    if (projectId) {
       const {
-        data: savedProject,
+        data,
         error: projectError,
       } = await supabase
         .from("builder_projects")
         .select("*")
-        .eq("owner_id", session.user.id)
-        .order("created_at", {
-          ascending: false,
-        })
-        .limit(1)
+        .eq("id", projectId)
+        .eq("owner_id", user.id)
         .maybeSingle();
 
-      if (!projectError && savedProject) {
-        activeProject = savedProject;
+      if (projectError) {
+        console.error(
+          "ASK project lookup error:",
+          projectError
+        );
+      }
 
-        setBuilderProject(savedProject);
-
-        if (
-          Array.isArray(savedProject.build_plan) &&
-          savedProject.build_plan.length > 0
-        ) {
-          activePlan = {
-            projectName:
-              savedProject.project_name,
-            buildStages:
-              savedProject.build_plan,
-          };
-
-          setBuilderPlan(activePlan);
-        }
+      if (data) {
+        savedProject = data;
       }
     }
 
-    const response = await fetch(
-      "/api/builder/ask",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
+    const activeProject =
+      savedProject || project || null;
+
+    const activePlan =
+      plan ||
+      activeProject?.build_plan ||
+      null;
+
+    const openai =
+      new OpenAI({
+        apiKey: openaiApiKey,
+      });
+
+    const systemPrompt = `
+You are BOMBA AI, an intelligent AI assistant inside the BOMBA AI creation platform.
+
+Your job is to understand the user's CURRENT question and answer it directly.
+
+IMPORTANT RULES:
+
+1. Answer the user's latest question.
+2. Do not bring unrelated older requests into the answer.
+3. If project context is provided, use it only when it is relevant to the current question.
+4. Do not pretend that you changed files, ran commands, deployed software, or completed a build when you did not actually do so.
+5. Give practical, clear and useful answers.
+6. When discussing Nigerian businesses, use Nigerian context and Naira (₦) when appropriate.
+7. If the user asks about their BOMBA AI project, explain what is actually known from the supplied project context.
+8. Do not invent project files, features, stages, URLs, database records, or actions.
+9. If the user asks a normal question unrelated to a project, simply answer the question normally.
+10. Keep the response organized and easy to read on a phone.
+`;
+
+    const context = {
+      currentUser: {
+        id: user.id,
+      },
+
+      currentQuestion:
+        question,
+
+      project:
+        activeProject
+          ? {
+              id: activeProject.id,
+              projectName:
+                activeProject.project_name,
+              originalRequest:
+                activeProject.original_request,
+              status:
+                activeProject.status,
+              currentStage:
+                activeProject.current_stage,
+              totalStages:
+                activeProject.total_stages,
+              isPaused:
+                activeProject.is_paused,
+              isCompleted:
+                activeProject.is_completed,
+            }
+          : null,
+
+      plan:
+        activePlan || null,
+    };
+
+    const completion =
+      await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        temperature: 0.4,
+        messages: [
+          {
+            role: "system",
+            content: systemPrompt,
+          },
+          {
+            role: "user",
+            content: `
+Current BOMBA AI context:
+
+${JSON.stringify(
+  context,
+  null,
+  2
+)}
+
+User's latest question:
+
+${question}
+
+Answer the latest question directly.
+`,
+          },
+        ],
+      });
+
+    const answer =
+      completion?.choices?.[0]?.message?.content?.trim();
+
+    if (!answer) {
+      return NextResponse.json(
+        {
+          error:
+            "BOMBA AI did not return an answer.",
         },
-        body: JSON.stringify({
-          /*
-            projectId is OPTIONAL now.
-          */
-          projectId:
-            activeProject?.id || "",
-
-          question,
-
-          project:
-            activeProject || null,
-
-          plan:
-            activePlan || null,
-        }),
-      }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        data?.error ||
-          "BOMBA AI could not answer your question."
+        { status: 500 }
       );
     }
 
-    if (!data?.answer) {
-      throw new Error(
-        "BOMBA AI did not return an answer."
-      );
-    }
-
-    setAskAnswer(data.answer);
-  } catch (err) {
+    return NextResponse.json({
+      success: true,
+      answer,
+    });
+  } catch (error) {
     console.error(
-      "ASK BOMBA AI error:",
-      err
+      "ASK BOMBA AI route error:",
+      error
     );
 
-    setAskError(
-      err?.message ||
-        "Something went wrong while asking BOMBA AI."
+    return NextResponse.json(
+      {
+        error:
+          error?.message ||
+          "Something went wrong while asking BOMBA AI.",
+      },
+      { status: 500 }
     );
-  } finally {
-    setAskLoading(false);
   }
 }
