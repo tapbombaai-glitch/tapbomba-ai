@@ -16,6 +16,7 @@ const FEATURES = [
   { icon: "✦", name: "Logo" },
   { icon: "🖼️", name: "Image" },
   { icon: "🛠️", name: "Universal Builder" },
+  { icon: "💬", name: "ASK BOMBA AI" },
 ];
 
 export default function Home() {
@@ -40,6 +41,12 @@ export default function Home() {
     useState(false);
   const [builderBuildLogs, setBuilderBuildLogs] = useState([]);
   const [builderBuildError, setBuilderBuildError] = useState("");
+
+  const [askPrompt, setAskPrompt] = useState("");
+  const [askAnswer, setAskAnswer] = useState("");
+  const [askLoading, setAskLoading] = useState(false);
+  const [askError, setAskError] = useState("");
+  const [voiceListening, setVoiceListening] = useState(false);
 
   const fileInputRef = useRef(null);
 
@@ -359,20 +366,15 @@ export default function Home() {
         );
       }
 
-      /*
-       * Do not display generated source code in the UI.
-       * The backend security layer will be tightened separately
-       * so normal users cannot receive protected source files.
-       */
       const safeProject = {
-  ...builderProject,
-  ...buildData.project,
-  original_request:
-    builderProject.original_request,
-  project_files: [],
-};
+        ...builderProject,
+        ...buildData.project,
+        original_request:
+          builderProject.original_request,
+        project_files: [],
+      };
 
-setBuilderProject(safeProject);
+      setBuilderProject(safeProject);
 
       const stageName =
         buildData?.stage?.stageName ||
@@ -405,6 +407,174 @@ setBuilderProject(safeProject);
     }
   }
 
+  async function askBombaAI() {
+    const question = askPrompt.trim();
+
+    if (!question) {
+      setAskError(
+        "Type or speak a question for BOMBA AI."
+      );
+      return;
+    }
+
+    if (!builderProject?.id) {
+      setAskError(
+        "Start a Universal Builder project first. Ask BOMBA AI uses your project context."
+      );
+      return;
+    }
+
+    setAskLoading(true);
+    setAskError("");
+    setAskAnswer("");
+
+    try {
+      const supabaseUrl =
+        process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+      const supabaseAnonKey =
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+      if (!supabaseUrl || !supabaseAnonKey) {
+        throw new Error("Supabase is not configured.");
+      }
+
+      const { createClient } = await import(
+        "@supabase/supabase-js"
+      );
+
+      const supabase = createClient(
+        supabaseUrl,
+        supabaseAnonKey
+      );
+
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError || !session) {
+        throw new Error(
+          "Please log in before using Ask BOMBA AI."
+        );
+      }
+
+      const response = await fetch(
+        "/api/builder/ask",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            projectId: builderProject.id,
+            question,
+            project: builderProject,
+            plan: builderPlan,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error ||
+            "BOMBA AI could not answer your question."
+        );
+      }
+
+      if (!data?.answer) {
+        throw new Error(
+          "BOMBA AI did not return an answer."
+        );
+      }
+
+      setAskAnswer(data.answer);
+    } catch (err) {
+      console.error("Ask BOMBA AI error:", err);
+
+      setAskError(
+        err?.message ||
+          "Something went wrong while asking BOMBA AI."
+      );
+    } finally {
+      setAskLoading(false);
+    }
+  }
+
+  function startVoiceInput() {
+    setAskError("");
+
+    if (voiceListening) {
+      return;
+    }
+
+    const SpeechRecognition =
+      window.SpeechRecognition ||
+      window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      setAskError(
+        "Voice input is not supported in this browser. Please use Google Chrome on Android."
+      );
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+
+    recognition.lang = "en-US";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      setVoiceListening(true);
+      setAskError("");
+    };
+
+    recognition.onresult = (event) => {
+      const transcript =
+        event.results?.[0]?.[0]?.transcript || "";
+
+      if (transcript.trim()) {
+        setAskPrompt(transcript.trim());
+      }
+    };
+
+    recognition.onerror = (event) => {
+      console.error("Voice recognition error:", event);
+
+      setVoiceListening(false);
+
+      if (event?.error === "not-allowed") {
+        setAskError(
+          "Microphone permission was denied. Please allow microphone access and try again."
+        );
+        return;
+      }
+
+      setAskError(
+        "BOMBA AI could not hear the voice input. Please try again."
+      );
+    };
+
+    recognition.onend = () => {
+      setVoiceListening(false);
+    };
+
+    try {
+      recognition.start();
+    } catch (error) {
+      console.error("Voice start error:", error);
+      setVoiceListening(false);
+      setAskError(
+        "Voice input could not be started. Please try again."
+      );
+    }
+  }
+
   function downloadImage() {
     if (!image) return;
 
@@ -422,6 +592,14 @@ setBuilderProject(safeProject);
     if (name === "Universal Builder") {
       setActiveFeature("Universal Builder");
       setError("");
+      setAskError("");
+      return;
+    }
+
+    if (name === "ASK BOMBA AI") {
+      setActiveFeature("ASK BOMBA AI");
+      setError("");
+      setAskError("");
       return;
     }
 
@@ -444,6 +622,9 @@ setBuilderProject(safeProject);
     setBuilderBuildLoading(false);
     setBuilderView("start");
     setBuilderPrompt("");
+    setAskPrompt("");
+    setAskAnswer("");
+    setAskError("");
     setError("");
   }
 
@@ -475,6 +656,19 @@ setBuilderProject(safeProject);
     setMenuOpen(false);
     setActiveFeature("Universal Builder");
     setError("");
+
+    setTimeout(() => {
+      window.scrollTo({
+        top: document.body.scrollHeight,
+        behavior: "smooth",
+      });
+    }, 50);
+  }
+
+  function openAsk() {
+    setMenuOpen(false);
+    setActiveFeature("ASK BOMBA AI");
+    setAskError("");
 
     setTimeout(() => {
       window.scrollTo({
@@ -605,6 +799,15 @@ setBuilderProject(safeProject);
             <button
               type="button"
               style={styles.menuItem}
+              onClick={openAsk}
+            >
+              <span style={styles.menuIcon}>💬</span>
+              <span>Ask BOMBA AI</span>
+            </button>
+
+            <button
+              type="button"
+              style={styles.menuItem}
               onClick={openAuth}
             >
               <span style={styles.menuIcon}>🔐</span>
@@ -672,7 +875,212 @@ setBuilderProject(safeProject);
         </div>
       </section>
 
-      {activeFeature === "Universal Builder" ? (
+      {activeFeature === "ASK BOMBA AI" ? (
+        <section style={styles.workspace}>
+          <div style={styles.sectionTop}>
+            <div>
+              <div style={styles.smallGold}>
+                INTELLIGENT ASSISTANT
+              </div>
+
+              <h2 style={styles.sectionTitle}>
+                Ask BOMBA AI
+              </h2>
+            </div>
+
+            <div style={styles.liveBadge}>
+              <span style={styles.liveDot}></span>
+              AI READY
+            </div>
+          </div>
+
+          <div style={styles.askCard}>
+            <div style={styles.askLogo}>
+              TB
+            </div>
+
+            <h2 style={styles.askTitle}>
+              Ask BOMBA AI anything about your project
+            </h2>
+
+            <p style={styles.askDescription}>
+              Ask questions, explain changes, understand
+              your build progress, or tell BOMBA AI what
+              you want to change next.
+            </p>
+
+            {!builderProject && (
+              <div style={styles.askNotice}>
+                <div style={styles.askNoticeIcon}>
+                  💡
+                </div>
+
+                <div>
+                  <strong>
+                    Start a Universal Builder project first
+                  </strong>
+
+                  <div style={styles.askNoticeText}>
+                    Ask BOMBA AI uses your saved project,
+                    build stage and project plan to give
+                    accurate answers.
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={openBuilder}
+                    style={styles.askBuilderButton}
+                  >
+                    🛠️ OPEN UNIVERSAL BUILDER
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {builderProject && (
+              <div style={styles.askProject}>
+                <div style={styles.boxLabel}>
+                  CURRENT PROJECT
+                </div>
+
+                <div style={styles.askProjectName}>
+                  {builderProject.project_name ||
+                    "BOMBA Project"}
+                </div>
+
+                <div style={styles.askProjectStage}>
+                  Stage {currentStage} of{" "}
+                  {totalStages || "—"} •{" "}
+                  {buildCompleted
+                    ? "Complete"
+                    : "Active"}
+                </div>
+              </div>
+            )}
+
+            <label style={styles.label}>
+              Your question or instruction
+            </label>
+
+            <textarea
+              value={askPrompt}
+              onChange={(e) => {
+                setAskPrompt(e.target.value);
+                setAskError("");
+              }}
+              placeholder="Example: What has BOMBA built so far? What should be built next? Add a teacher attendance feature..."
+              style={styles.askTextarea}
+            />
+
+            <div style={styles.askActions}>
+              <button
+                type="button"
+                onClick={startVoiceInput}
+                disabled={
+                  voiceListening || askLoading
+                }
+                style={{
+                  ...styles.voiceButton,
+                  opacity:
+                    voiceListening || askLoading
+                      ? 0.65
+                      : 1,
+                }}
+              >
+                {voiceListening
+                  ? "🎙️ LISTENING..."
+                  : "🎙️ VOICE"}
+              </button>
+
+              <button
+                type="button"
+                onClick={askBombaAI}
+                disabled={
+                  askLoading || !builderProject
+                }
+                style={{
+                  ...styles.askButton,
+                  opacity:
+                    askLoading || !builderProject
+                      ? 0.65
+                      : 1,
+                }}
+              >
+                {askLoading
+                  ? "🧠 THINKING..."
+                  : "💬 ASK BOMBA AI"}
+              </button>
+            </div>
+
+            {voiceListening && (
+              <div style={styles.voiceStatus}>
+                🎙️ BOMBA AI is listening. Speak clearly...
+              </div>
+            )}
+
+            {askError && (
+              <div style={styles.error}>
+                {askError}
+              </div>
+            )}
+
+            {askLoading && (
+              <div style={styles.askLoadingCard}>
+                <div style={styles.askLoadingLogo}>
+                  TB
+                </div>
+
+                <div>
+                  <strong>
+                    BOMBA AI is thinking...
+                  </strong>
+
+                  <div style={styles.askLoadingText}>
+                    Checking your project context and
+                    preparing the answer.
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {askAnswer && !askLoading && (
+              <div style={styles.answerCard}>
+                <div style={styles.answerHeader}>
+                  <div style={styles.answerLogo}>
+                    TB
+                  </div>
+
+                  <div>
+                    <div style={styles.answerLabel}>
+                      BOMBA AI
+                    </div>
+
+                    <div style={styles.answerSubLabel}>
+                      Project Assistant
+                    </div>
+                  </div>
+                </div>
+
+                <div style={styles.answerText}>
+                  {askAnswer}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAskPrompt("");
+                    setAskAnswer("");
+                    setAskError("");
+                  }}
+                  style={styles.askNewButton}
+                >
+                  + ASK ANOTHER QUESTION
+                </button>
+              </div>
+            )}
+          </div>
+        </section>
+      ) : activeFeature === "Universal Builder" ? (
         <section style={styles.workspace}>
           <div style={styles.sectionTop}>
             <div>
@@ -942,6 +1350,16 @@ setBuilderProject(safeProject);
                     🔒 FILES & CODE
                   </button>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setActiveFeature("ASK BOMBA AI")
+                  }
+                  style={styles.askFromProjectButton}
+                >
+                  💬 ASK BOMBA AI ABOUT THIS PROJECT
+                </button>
 
                 <div style={styles.workspaceInfo}>
                   <div style={styles.infoIcon}>✓</div>
@@ -1953,10 +2371,10 @@ const styles = {
   featureRow: {
     display: "grid",
     gridTemplateColumns:
-      "repeat(5, minmax(0, 1fr))",
+      "repeat(6, minmax(0, 1fr))",
     gap: "7px",
     marginTop: "28px",
-    maxWidth: "700px",
+    maxWidth: "760px",
     marginLeft: "auto",
     marginRight: "auto",
   },
@@ -2041,6 +2459,266 @@ const styles = {
     padding: "18px",
     boxShadow:
       "0 15px 50px rgba(0,0,0,0.25)",
+  },
+
+  askCard: {
+    background: "#0d0d0d",
+    border: "1px solid #242424",
+    borderRadius: "18px",
+    padding: "22px 18px",
+    boxShadow:
+      "0 15px 50px rgba(0,0,0,0.25)",
+  },
+
+  askLogo: {
+    width: "58px",
+    height: "58px",
+    margin: "0 auto 15px",
+    borderRadius: "14px",
+    background: "#FFD43B",
+    color: "#000000",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: 950,
+    fontSize: "19px",
+    boxShadow:
+      "0 0 25px rgba(255,212,59,0.14)",
+  },
+
+  askTitle: {
+    margin: 0,
+    textAlign: "center",
+    fontSize: "23px",
+    lineHeight: 1.2,
+  },
+
+  askDescription: {
+    color: "#929292",
+    fontSize: "12px",
+    lineHeight: 1.65,
+    maxWidth: "560px",
+    margin: "11px auto 22px",
+    textAlign: "center",
+  },
+
+  askNotice: {
+    display: "flex",
+    gap: "11px",
+    alignItems: "flex-start",
+    background: "#111111",
+    border: "1px solid #3b3417",
+    borderRadius: "12px",
+    padding: "13px",
+    marginBottom: "16px",
+    fontSize: "11px",
+  },
+
+  askNoticeIcon: {
+    fontSize: "19px",
+  },
+
+  askNoticeText: {
+    color: "#777777",
+    fontSize: "10px",
+    lineHeight: 1.5,
+    marginTop: "4px",
+  },
+
+  askBuilderButton: {
+    marginTop: "10px",
+    border: "1px solid #5c4e1d",
+    background: "#171406",
+    color: "#FFD43B",
+    borderRadius: "9px",
+    padding: "9px 11px",
+    fontSize: "10px",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  askProject: {
+    background: "#080808",
+    border: "1px solid #242424",
+    borderRadius: "11px",
+    padding: "12px",
+    marginBottom: "15px",
+  },
+
+  askProjectName: {
+    fontSize: "13px",
+    fontWeight: 900,
+  },
+
+  askProjectStage: {
+    color: "#777777",
+    fontSize: "10px",
+    marginTop: "4px",
+  },
+
+  askTextarea: {
+    width: "100%",
+    minHeight: "135px",
+    resize: "vertical",
+    boxSizing: "border-box",
+    background: "#050505",
+    border: "1px solid #292929",
+    borderRadius: "12px",
+    color: "#ffffff",
+    padding: "14px",
+    outline: "none",
+    fontSize: "14px",
+    lineHeight: 1.55,
+  },
+
+  askActions: {
+    display: "grid",
+    gridTemplateColumns:
+      "minmax(0, 0.8fr) minmax(0, 1.6fr)",
+    gap: "9px",
+    marginTop: "12px",
+  },
+
+  voiceButton: {
+    border: "1px solid #514719",
+    background: "#171406",
+    color: "#FFD43B",
+    borderRadius: "11px",
+    padding: "13px 8px",
+    fontSize: "11px",
+    fontWeight: 950,
+    cursor: "pointer",
+  },
+
+  askButton: {
+    border: "none",
+    background: "#FFD43B",
+    color: "#000000",
+    borderRadius: "11px",
+    padding: "13px 8px",
+    fontSize: "11px",
+    fontWeight: 950,
+    cursor: "pointer",
+  },
+
+  voiceStatus: {
+    marginTop: "10px",
+    padding: "10px",
+    background: "#171406",
+    border: "1px solid #4b411d",
+    borderRadius: "9px",
+    color: "#FFD43B",
+    textAlign: "center",
+    fontSize: "10px",
+    fontWeight: 800,
+  },
+
+  askLoadingCard: {
+    display: "flex",
+    alignItems: "center",
+    gap: "11px",
+    marginTop: "14px",
+    padding: "13px",
+    background: "#111111",
+    border: "1px solid #292929",
+    borderRadius: "11px",
+    fontSize: "11px",
+  },
+
+  askLoadingLogo: {
+    width: "38px",
+    height: "38px",
+    flexShrink: 0,
+    borderRadius: "9px",
+    background: "#FFD43B",
+    color: "#000000",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: 950,
+    fontSize: "12px",
+  },
+
+  askLoadingText: {
+    color: "#777777",
+    fontSize: "10px",
+    lineHeight: 1.4,
+    marginTop: "3px",
+  },
+
+  answerCard: {
+    marginTop: "15px",
+    background: "#080808",
+    border: "1px solid #3a3316",
+    borderRadius: "14px",
+    padding: "16px",
+  },
+
+  answerHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    paddingBottom: "12px",
+    borderBottom: "1px solid #242424",
+  },
+
+  answerLogo: {
+    width: "36px",
+    height: "36px",
+    borderRadius: "9px",
+    background: "#FFD43B",
+    color: "#000000",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: 950,
+    fontSize: "12px",
+  },
+
+  answerLabel: {
+    color: "#FFD43B",
+    fontSize: "11px",
+    fontWeight: 950,
+  },
+
+  answerSubLabel: {
+    color: "#666666",
+    fontSize: "9px",
+    marginTop: "2px",
+  },
+
+  answerText: {
+    color: "#dddddd",
+    fontSize: "13px",
+    lineHeight: 1.7,
+    whiteSpace: "pre-wrap",
+    marginTop: "14px",
+  },
+
+  askNewButton: {
+    width: "100%",
+    marginTop: "14px",
+    border: "1px solid #303030",
+    background: "#111111",
+    color: "#ffffff",
+    borderRadius: "10px",
+    padding: "11px",
+    fontSize: "10px",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  askFromProjectButton: {
+    width: "100%",
+    marginTop: "10px",
+    border: "1px solid #514719",
+    background: "#171406",
+    color: "#FFD43B",
+    borderRadius: "11px",
+    padding: "12px",
+    fontSize: "10px",
+    fontWeight: 900,
+    cursor: "pointer",
   },
 
   builderCard: {
