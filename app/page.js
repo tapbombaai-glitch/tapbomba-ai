@@ -742,9 +742,7 @@ export default function Home() {
 
               <div style={styles.builderSteps}>
                 <div style={styles.builderStep}>
-                  <div style={styles.stepNumber}>
-                    1
-                  </div>
+                  <div style={styles.stepNumber}>1</div>
 
                   <div>
                     <strong>Describe</strong>
@@ -756,9 +754,7 @@ export default function Home() {
                 </div>
 
                 <div style={styles.builderStep}>
-                  <div style={styles.stepNumber}>
-                    2
-                  </div>
+                  <div style={styles.stepNumber}>2</div>
 
                   <div>
                     <strong>Understand & Plan</strong>
@@ -771,9 +767,7 @@ export default function Home() {
                 </div>
 
                 <div style={styles.builderStep}>
-                  <div style={styles.stepNumber}>
-                    3
-                  </div>
+                  <div style={styles.stepNumber}>3</div>
 
                   <div>
                     <strong>Build</strong>
@@ -786,9 +780,7 @@ export default function Home() {
                 </div>
 
                 <div style={styles.builderStep}>
-                  <div style={styles.stepNumber}>
-                    4
-                  </div>
+                  <div style={styles.stepNumber}>4</div>
 
                   <div>
                     <strong>Save</strong>
@@ -801,9 +793,7 @@ export default function Home() {
                 </div>
 
                 <div style={styles.builderStep}>
-                  <div style={styles.stepNumber}>
-                    5
-                  </div>
+                  <div style={styles.stepNumber}>5</div>
 
                   <div>
                     <strong>Continue</strong>
@@ -816,9 +806,7 @@ export default function Home() {
                 </div>
 
                 <div style={styles.builderStep}>
-                  <div style={styles.stepNumber}>
-                    6
-                  </div>
+                  <div style={styles.stepNumber}>6</div>
 
                   <div>
                     <strong>Control</strong>
@@ -1267,24 +1255,18 @@ export default function Home() {
                   </p>
 
                   <div style={styles.sessionRule}>
-                    <strong>
-                      Current stage:
-                    </strong>{" "}
+                    <strong>Current stage:</strong>{" "}
                     {currentStage} /{" "}
                     {totalStages || "—"}
                   </div>
 
                   <div style={styles.sessionRule}>
-                    <strong>
-                      Session:
-                    </strong>{" "}
+                    <strong>Session:</strong>{" "}
                     3-minute build window
                   </div>
 
                   <div style={styles.sessionRule}>
-                    <strong>
-                      Continue:
-                    </strong>{" "}
+                    <strong>Continue:</strong>{" "}
                     from the exact saved stage
                   </div>
                 </div>
@@ -1413,11 +1395,11 @@ export default function Home() {
                     🔒
                   </div>
 
-                  <h3>
+                  <h3 style={styles.lockedFilesCardH3}>
                     SOURCE CODE LOCKED
                   </h3>
 
-                  <p>
+                  <p style={styles.lockedFilesCardP}>
                     BOMBA AI protects generated project
                     source code and ZIP files from normal
                     users. Preview and project use can be
@@ -2379,14 +2361,14 @@ const styles = {
     lineHeight: 1.5,
   },
 
-  
- lockedFilesCardH3: {
-  textAlign: "center",
-  padding: "30px 18px",
-  background: "#080808",
-  border: "1px solid #242424",
-  borderRadius: "14px",
-},
+  lockedFilesCard: {
+    textAlign: "center",
+    padding: "30px 18px",
+    background: "#080808",
+    border: "1px solid #242424",
+    borderRadius: "14px",
+  },
+
   lockIcon: {
     fontSize: "40px",
     marginBottom: "10px",
@@ -2398,7 +2380,7 @@ const styles = {
     fontSize: "16px",
   },
 
-  lockedFilesCard p: {
+  lockedFilesCardP: {
     color: "#888888",
     fontSize: "11px",
     lineHeight: 1.6,
