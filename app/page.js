@@ -2379,20 +2379,20 @@ const styles = {
     lineHeight: 1.5,
   },
 
-  lockedFilesCardH3: {
-    textAlign: "center",
-    padding: "30px 18px",
-    background: "#080808",
-    border: "1px solid #242424",
-    borderRadius: "14px",
-  },
-
+  
+ lockedFilesCardH3: {
+  textAlign: "center",
+  padding: "30px 18px",
+  background: "#080808",
+  border: "1px solid #242424",
+  borderRadius: "14px",
+},
   lockIcon: {
     fontSize: "40px",
     marginBottom: "10px",
   },
 
-  lockedFilesCard h3: {
+  lockedFilesCardH3: {
     margin: 0,
     color: "#FFD43B",
     fontSize: "16px",
