@@ -407,6 +407,24 @@ export default function Home() {
     }
   }
 
+    async function revealAskAnswerGradually(text) {
+    setAskAnswer("");
+
+    const words = text.split(/(\s+)/);
+    let current = "";
+
+    for (const part of words) {
+      current += part;
+      setAskAnswer(current);
+
+      if (part.trim()) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, 28)
+        );
+      }
+    }
+  }
+
   async function askBombaAI() {
     const question = askPrompt.trim();
 
@@ -436,7 +454,9 @@ export default function Home() {
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
       if (!supabaseUrl || !supabaseAnonKey) {
-        throw new Error("Supabase is not configured.");
+        throw new Error(
+          "Supabase is not configured."
+        );
       }
 
       const { createClient } = await import(
@@ -491,9 +511,12 @@ export default function Home() {
         );
       }
 
-      setAskAnswer(data.answer);
+      await revealAskAnswerGradually(data.answer);
     } catch (err) {
-      console.error("Ask BOMBA AI error:", err);
+      console.error(
+        "Ask BOMBA AI error:",
+        err
+      );
 
       setAskError(
         err?.message ||
