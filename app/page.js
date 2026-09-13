@@ -2379,7 +2379,7 @@ const styles = {
     lineHeight: 1.5,
   },
 
-  lockedFilesCard: {
+  lockedFilesCardH3: {
     textAlign: "center",
     padding: "30px 18px",
     background: "#080808",
