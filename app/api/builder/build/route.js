@@ -9,12 +9,6 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const BUILD_SESSION_MINUTES = 3;
-const COOLDOWN_HOURS = 10;
-
-// Leave a small safety margin before Render's execution limit.
-const MAX_ENGINE_RUNTIME_MS = 170000;
-
 /* -------------------------------------------------------
    HELPERS
 ------------------------------------------------------- */
@@ -22,100 +16,101 @@ const MAX_ENGINE_RUNTIME_MS = 170000;
 function cleanJsonText(text) {
   if (!text || typeof text !== "string") return "";
 
-  let cleaned = text.trim();
-
-  // Remove markdown code fences if the model adds them.
-  cleaned = cleaned
+  return text
+    .trim()
     .replace(/^```json\s*/i, "")
     .replace(/^```\s*/i, "")
     .replace(/\s*```$/i, "")
     .trim();
-
-  return cleaned;
 }
 
 function parseJsonFromAI(text) {
   const cleaned = cleanJsonText(text);
 
   if (!cleaned) {
-    throw new Error("AI returned an empty response.");
+    throw new Error("AI returned an empty build plan.");
   }
 
   try {
     return JSON.parse(cleaned);
   } catch (_) {
-    // Try extracting the outermost JSON object.
     const firstBrace = cleaned.indexOf("{");
     const lastBrace = cleaned.lastIndexOf("}");
 
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      const extracted = cleaned.slice(firstBrace, lastBrace + 1);
+    if (
+      firstBrace !== -1 &&
+      lastBrace !== -1 &&
+      lastBrace > firstBrace
+    ) {
+      const extracted = cleaned.slice(
+        firstBrace,
+        lastBrace + 1
+      );
 
       try {
         return JSON.parse(extracted);
       } catch (_) {
-        throw new Error("The AI returned invalid JSON.");
+        throw new Error(
+          "The AI returned an invalid build plan."
+        );
       }
     }
 
-    throw new Error("The AI returned invalid JSON.");
+    throw new Error(
+      "The AI returned an invalid build plan."
+    );
   }
 }
 
-function mergeProjectFiles(existingFiles, newFiles) {
-  const map = new Map();
-
-  for (const file of Array.isArray(existingFiles) ? existingFiles : []) {
-    if (!file?.path) continue;
-
-    map.set(file.path, {
-      path: file.path,
-      content: typeof file.content === "string" ? file.content : "",
-    });
+function normalizeBuildPlan(rawPlan) {
+  if (Array.isArray(rawPlan)) {
+    return rawPlan;
   }
 
-  for (const file of Array.isArray(newFiles) ? newFiles : []) {
-    if (!file?.path) continue;
-
-    map.set(file.path, {
-      path: file.path,
-      content: typeof file.content === "string" ? file.content : "",
-    });
+  if (
+    rawPlan &&
+    Array.isArray(rawPlan.buildStages)
+  ) {
+    return rawPlan.buildStages;
   }
 
-  return Array.from(map.values());
-}
+  if (
+    rawPlan &&
+    Array.isArray(rawPlan.stages)
+  ) {
+    return rawPlan.stages;
+  }
 
-function getRemainingSessionSeconds(sessionEndsAt) {
-  if (!sessionEndsAt) return 0;
+  if (
+    rawPlan &&
+    Array.isArray(rawPlan.plan)
+  ) {
+    return rawPlan.plan;
+  }
 
-  const end = new Date(sessionEndsAt).getTime();
-  const remaining = end - Date.now();
-
-  if (remaining <= 0) return 0;
-
-  return Math.floor(remaining / 1000);
+  return [];
 }
 
 /* -------------------------------------------------------
-   MAIN BUILD ENGINE
+   CREATE BUILD PLAN
 ------------------------------------------------------- */
 
 export async function POST(req) {
-  const requestStartedAt = Date.now();
-
   try {
-    /* ---------------------------------------------------
-       ENVIRONMENT
-    --------------------------------------------------- */
+    const supabaseUrl =
+      process.env.NEXT_PUBLIC_SUPABASE_URL;
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const supabaseAnonKey =
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-    if (!supabaseUrl || !supabaseAnonKey) {
+    if (
+      !supabaseUrl ||
+      !supabaseAnonKey
+    ) {
       return NextResponse.json(
         {
-          error: "Supabase environment variables are not configured.",
+          error:
+            "Supabase environment variables are not configured.",
         },
         { status: 500 }
       );
@@ -124,7 +119,8 @@ export async function POST(req) {
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
         {
-          error: "OpenAI environment variable is not configured.",
+          error:
+            "OpenAI environment variable is not configured.",
         },
         { status: 500 }
       );
@@ -144,7 +140,8 @@ export async function POST(req) {
     if (!projectId) {
       return NextResponse.json(
         {
-          error: "A project ID is required.",
+          error:
+            "A project ID is required to create the build plan.",
         },
         { status: 400 }
       );
@@ -154,12 +151,14 @@ export async function POST(req) {
        AUTH
     --------------------------------------------------- */
 
-    const authHeader = req.headers.get("authorization");
+    const authHeader =
+      req.headers.get("authorization");
 
     if (!authHeader) {
       return NextResponse.json(
         {
-          error: "Please log in before building your project.",
+          error:
+            "Please log in before creating a build plan.",
         },
         { status: 401 }
       );
@@ -185,7 +184,8 @@ export async function POST(req) {
     if (userError || !user) {
       return NextResponse.json(
         {
-          error: "Your login session could not be verified.",
+          error:
+            "Your login session could not be verified.",
         },
         { status: 401 }
       );
@@ -206,367 +206,119 @@ export async function POST(req) {
       .single();
 
     if (projectError || !project) {
-      console.error("Builder project load error:", projectError);
+      console.error(
+        "Builder project load error:",
+        projectError
+      );
 
       return NextResponse.json(
         {
-          error: "Project not found or you do not have access to it.",
+          error:
+            "Project not found or you do not have access to it.",
         },
         { status: 404 }
       );
     }
 
     /* ---------------------------------------------------
-       COMPLETED PROJECT
+       EXISTING PLAN
     --------------------------------------------------- */
 
-    if (project.is_completed) {
+    const existingPlan =
+      normalizeBuildPlan(
+        project.build_plan
+      );
+
+    if (existingPlan.length > 0) {
       return NextResponse.json({
         success: true,
-        completed: true,
-        paused: false,
         projectId: project.id,
-        currentStage: project.current_stage,
-        totalStages: project.total_stages,
         projectName: project.project_name,
-        message: "This project has already been completed.",
+        buildPlan: existingPlan,
+        build_plan: existingPlan,
+        totalStages: existingPlan.length,
+        total_stages: existingPlan.length,
+        message:
+          "The project already has a saved build plan.",
       });
     }
 
     /* ---------------------------------------------------
-       COOLDOWN CHECK
+       OPTIONAL FRONTEND PLAN
     --------------------------------------------------- */
 
-    if (project.cooldown_ends_at) {
-      const cooldownEnd = new Date(
-        project.cooldown_ends_at
-      ).getTime();
-
-      if (cooldownEnd > Date.now()) {
-        const remainingMs = cooldownEnd - Date.now();
-        const remainingMinutes = Math.ceil(
-          remainingMs / 60000
-        );
-
-        return NextResponse.json({
-          success: true,
-          completed: false,
-          paused: true,
-          cooldown: true,
-          projectId: project.id,
-          currentStage: project.current_stage || 0,
-          totalStages: project.total_stages || 0,
-          projectName: project.project_name,
-          cooldownEndsAt: project.cooldown_ends_at,
-          cooldownRemainingMinutes: remainingMinutes,
-          message:
-            "The current build session has ended. BOMBA AI will continue from the next saved stage after the cooldown period.",
-        });
-      }
-    }
+    let buildPlan = normalizeBuildPlan(
+      body?.plan ||
+        body?.buildPlan ||
+        body?.build_plan
+    );
 
     /* ---------------------------------------------------
-       PROJECT PLAN
+       GENERATE PLAN WITH AI IF NEEDED
     --------------------------------------------------- */
 
-    const buildPlan = Array.isArray(project.build_plan)
-      ? project.build_plan
-      : [];
+    if (buildPlan.length === 0) {
+      const originalRequest =
+        typeof project.original_request ===
+        "string"
+          ? project.original_request.trim()
+          : "";
 
-    const totalStages =
-      Number(project.total_stages) ||
-      buildPlan.length ||
-      0;
-
-    if (totalStages === 0) {
-      return NextResponse.json(
-        {
-          error:
-            "This project does not have a build plan yet.",
-        },
-        { status: 400 }
-      );
-    }
-
-    /* ---------------------------------------------------
-       CURRENT STAGE
-    --------------------------------------------------- */
-
-    let currentStage =
-      Number(project.current_stage) || 0;
-
-    let projectFiles = Array.isArray(project.project_files)
-      ? project.project_files
-      : [];
-
-    /* ---------------------------------------------------
-       START / CONTINUE 3-MINUTE SESSION
-    --------------------------------------------------- */
-
-    let sessionEndsAt = project.build_session_ends_at;
-
-    const existingSessionExpired =
-      !sessionEndsAt ||
-      new Date(sessionEndsAt).getTime() <= Date.now();
-
-    if (existingSessionExpired) {
-      const sessionStart = new Date();
-
-      const sessionEnd = new Date(
-        Date.now() +
-          BUILD_SESSION_MINUTES * 60 * 1000
-      );
-
-      sessionEndsAt = sessionEnd.toISOString();
-
-      const { error: sessionError } = await supabase
-        .from("builder_projects")
-        .update({
-          build_session_started_at:
-            sessionStart.toISOString(),
-
-          build_session_ends_at:
-            sessionEndsAt,
-
-          is_paused: false,
-
-          cooldown_ends_at: null,
-
-          status: "building",
-
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", project.id)
-        .eq("owner_id", user.id);
-
-      if (sessionError) {
-        console.error(
-          "Session start error:",
-          sessionError
-        );
-
+      if (!originalRequest) {
         return NextResponse.json(
           {
             error:
-              "Could not start the build session.",
+              "This project does not contain an original build request.",
           },
-          { status: 500 }
+          { status: 400 }
         );
       }
-    }
-
-    /* ---------------------------------------------------
-       AUTOMATIC STAGE LOOP
-    --------------------------------------------------- */
-
-    while (currentStage < totalStages) {
-      /* -----------------------------------------------
-         CHECK REAL SESSION TIME
-      ------------------------------------------------ */
-
-      const remainingSeconds =
-        getRemainingSessionSeconds(sessionEndsAt);
-
-      if (remainingSeconds <= 0) {
-        const cooldownEnds = new Date(
-          Date.now() +
-            COOLDOWN_HOURS * 60 * 60 * 1000
-        ).toISOString();
-
-        await supabase
-          .from("builder_projects")
-          .update({
-            is_paused: true,
-            status: "paused",
-            cooldown_ends_at: cooldownEnds,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", project.id)
-          .eq("owner_id", user.id);
-
-        return NextResponse.json({
-          success: true,
-          completed: false,
-          paused: true,
-          cooldown: true,
-          projectId: project.id,
-          currentStage,
-          totalStages,
-          projectName: project.project_name,
-          cooldownEndsAt: cooldownEnds,
-          message:
-            "The 3-minute build session has ended. Progress has been saved.",
-        });
-      }
-
-      /* -----------------------------------------------
-         SAFETY CHECK FOR SERVER RUNTIME
-      ------------------------------------------------ */
-
-      const engineRuntime =
-        Date.now() - requestStartedAt;
-
-      if (
-        engineRuntime >=
-        MAX_ENGINE_RUNTIME_MS
-      ) {
-        const cooldownEnds = new Date(
-          Date.now() +
-            COOLDOWN_HOURS * 60 * 60 * 1000
-        ).toISOString();
-
-        await supabase
-          .from("builder_projects")
-          .update({
-            is_paused: true,
-            status: "paused",
-            cooldown_ends_at: cooldownEnds,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", project.id)
-          .eq("owner_id", user.id);
-
-        return NextResponse.json({
-          success: true,
-          completed: false,
-          paused: true,
-          cooldown: true,
-          projectId: project.id,
-          currentStage,
-          totalStages,
-          projectName: project.project_name,
-          cooldownEndsAt: cooldownEnds,
-          message:
-            "BOMBA AI safely saved the latest build progress before the server runtime limit.",
-        });
-      }
-
-      /* -----------------------------------------------
-         STAGE INFORMATION
-      ------------------------------------------------ */
-
-      const stageNumber = currentStage + 1;
-
-      const stage =
-        buildPlan[currentStage] || {
-          stage: stageNumber,
-          name: `Build Stage ${stageNumber}`,
-          description:
-            "Continue building the application.",
-        };
-
-      /* -----------------------------------------------
-         AI BUILD REQUEST
-      ------------------------------------------------ */
 
       const systemPrompt = `
-You are BOMBA AI's REAL SOFTWARE BUILD ENGINE.
+You are BOMBA AI's software architecture and build planning engine.
 
-You are not a planning assistant.
+Create a REAL multi-stage software build plan for the user's requested application.
 
-You are actively building a real web application.
+The plan must describe actual implementation work.
 
-The user has already requested this application and BOMBA AI
-has already created a multi-stage build plan.
+Do not create fake waiting stages.
 
-Your job is to perform ONLY the current build stage.
+Do not create vague stages.
 
-CURRENT STAGE:
-${stageNumber}
+Each stage must contain:
+- stage
+- name
+- description
 
-STAGE NAME:
-${stage.name}
+The stages must progress logically from project foundation to a polished,
+functional application.
 
-STAGE DESCRIPTION:
-${stage.description}
+The final stages should include testing, refinement, responsiveness,
+and final integration where appropriate.
 
-IMPORTANT RULES:
+Return ONLY valid JSON.
 
-1. Actually create the files needed for this stage.
-2. Return complete file contents.
-3. Do not return placeholders such as:
-   "add code here"
-   "implement later"
-   "TODO"
-   "coming soon".
-
-4. Build real functional software.
-
-5. If earlier files already exist, preserve their functionality.
-
-6. You may create new files.
-
-7. You may update existing files when necessary.
-
-8. Do not delete working functionality unless absolutely necessary.
-
-9. The final application should be professional and organized.
-
-10. Use responsive mobile-first design.
-
-11. Include realistic sample data when appropriate.
-
-12. Generated applications must NOT contain BOMBA AI branding unless
-the user specifically requested BOMBA AI branding inside the generated app.
-
-13. The generated project should be capable of becoming a real working
-application, not merely a visual mockup.
-
-14. If this stage depends on previous files, inspect the supplied
-existing files and build on them.
-
-15. Keep the project architecture clean.
-
-RETURN ONLY VALID JSON.
-
-Use exactly this structure:
+Use exactly:
 
 {
-  "stageCompleted": true,
-  "summary": "short description of what was actually built",
-  "files": [
+  "buildStages": [
     {
-      "path": "relative/path/to/file",
-      "content": "complete file contents"
+      "stage": 1,
+      "name": "Stage name",
+      "description": "Specific implementation work"
     }
   ]
 }
 
-Every file must contain complete source code.
+Create between 6 and 10 meaningful stages.
 `;
-
-      const existingFilesForAI =
-        projectFiles.map((file) => ({
-          path: file.path,
-          content: file.content,
-        }));
 
       const userPrompt = `
 ORIGINAL USER REQUEST:
 
-${project.original_request}
+${originalRequest}
 
-FULL BUILD PLAN:
-
-${JSON.stringify(buildPlan, null, 2)}
-
-CURRENT STAGE:
-
-${JSON.stringify(stage, null, 2)}
-
-FILES ALREADY CREATED:
-
-${JSON.stringify(
-  existingFilesForAI,
-  null,
-  2
-)}
-
-Build the current stage now.
-
-Do real implementation work.
-
-Return only valid JSON.
+Create the complete real build plan now.
 `;
 
       let aiResponse;
@@ -575,7 +327,7 @@ Return only valid JSON.
         aiResponse =
           await openai.chat.completions.create({
             model: "gpt-4o-mini",
-            temperature: 0.1,
+            temperature: 0.2,
 
             response_format: {
               type: "json_object",
@@ -594,7 +346,7 @@ Return only valid JSON.
           });
       } catch (error) {
         console.error(
-          "OpenAI build error:",
+          "OpenAI build plan error:",
           error
         );
 
@@ -602,29 +354,23 @@ Return only valid JSON.
           {
             error:
               error?.message ||
-              "The AI build engine could not complete this stage.",
-            currentStage,
-            totalStages,
+              "BOMBA AI could not create the build plan.",
           },
           { status: 500 }
         );
       }
-
-      /* -----------------------------------------------
-         PARSE AI RESPONSE
-      ------------------------------------------------ */
 
       const rawContent =
         aiResponse?.choices?.[0]?.message?.content;
 
-      let stageResult;
+      let planResult;
 
       try {
-        stageResult =
+        planResult =
           parseJsonFromAI(rawContent);
       } catch (error) {
         console.error(
-          "Build JSON parsing error:",
+          "Build plan JSON error:",
           error
         );
 
@@ -632,220 +378,134 @@ Return only valid JSON.
           {
             error:
               error?.message ||
-              "The AI returned an invalid build response.",
-            currentStage,
-            totalStages,
+              "BOMBA AI returned an invalid build plan.",
           },
           { status: 500 }
         );
       }
 
-      /* -----------------------------------------------
-         VALIDATE FILES
-      ------------------------------------------------ */
-
-      const generatedFiles =
-        Array.isArray(stageResult?.files)
-          ? stageResult.files
-          : [];
-
-      if (generatedFiles.length === 0) {
-        return NextResponse.json(
-          {
-            error:
-              "The AI did not create any files for this stage.",
-            currentStage,
-            totalStages,
-          },
-          { status: 500 }
-        );
-      }
-
-      /* -----------------------------------------------
-         MERGE FILES
-      ------------------------------------------------ */
-
-      projectFiles = mergeProjectFiles(
-        projectFiles,
-        generatedFiles
-      );
-
-      /* -----------------------------------------------
-         MOVE TO NEXT STAGE
-      ------------------------------------------------ */
-
-      currentStage = stageNumber;
-
-      const completed =
-        currentStage >= totalStages;
-
-      /* -----------------------------------------------
-         SAVE AFTER EVERY STAGE
-      ------------------------------------------------ */
-
-      const updateData = {
-        project_files: projectFiles,
-
-        current_stage: currentStage,
-
-        total_stages: totalStages,
-
-        status: completed
-          ? "completed"
-          : "building",
-
-        is_paused: false,
-
-        is_completed: completed,
-
-        updated_at: new Date().toISOString(),
-      };
-
-      if (completed) {
-        updateData.cooldown_ends_at = null;
-      }
-
-      const {
-        error: saveError,
-      } = await supabase
-        .from("builder_projects")
-        .update(updateData)
-        .eq("id", project.id)
-        .eq("owner_id", user.id);
-
-      if (saveError) {
-        console.error(
-          "Stage save error:",
-          saveError
-        );
-
-        return NextResponse.json(
-          {
-            error:
-              "The build stage was created but could not be saved.",
-            currentStage,
-            totalStages,
-          },
-          { status: 500 }
-        );
-      }
-
-      /* -----------------------------------------------
-         COMPLETED
-      ------------------------------------------------ */
-
-      if (completed) {
-        return NextResponse.json({
-          success: true,
-          completed: true,
-          paused: false,
-          cooldown: false,
-
-          projectId: project.id,
-
-          projectName:
-            stageResult.projectName ||
-            project.project_name,
-
-          currentStage,
-
-          totalStages,
-
-          progress: 100,
-
-          filesCreated: projectFiles.length,
-
-          stageSummary:
-            stageResult.summary ||
-            `Completed build stage ${stageNumber}.`,
-
-          message:
-            "BOMBA AI has completed the entire build.",
-        });
-      }
-
-      /* -----------------------------------------------
-         CONTINUE AUTOMATICALLY
-         No manual BUILD NEXT STAGE button required.
-      ------------------------------------------------ */
-
-      const timeLeft =
-        getRemainingSessionSeconds(
-          sessionEndsAt
-        );
-
-      if (timeLeft <= 0) {
-        const cooldownEnds = new Date(
-          Date.now() +
-            COOLDOWN_HOURS * 60 * 60 * 1000
-        ).toISOString();
-
-        await supabase
-          .from("builder_projects")
-          .update({
-            is_paused: true,
-            status: "paused",
-            cooldown_ends_at: cooldownEnds,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", project.id)
-          .eq("owner_id", user.id);
-
-        return NextResponse.json({
-          success: true,
-          completed: false,
-          paused: true,
-          cooldown: true,
-
-          projectId: project.id,
-
-          currentStage,
-
-          totalStages,
-
-          progress: Math.round(
-            (currentStage / totalStages) * 100
-          ),
-
-          projectName: project.project_name,
-
-          filesCreated:
-            projectFiles.length,
-
-          cooldownEndsAt:
-            cooldownEnds,
-
-          stageSummary:
-            stageResult.summary ||
-            `Completed stage ${stageNumber}.`,
-
-          message:
-            "BOMBA AI automatically saved the latest stage. The build session has ended.",
-        });
-      }
-
-      // Continue the while loop automatically.
+      buildPlan =
+        normalizeBuildPlan(planResult);
     }
 
     /* ---------------------------------------------------
-       FALLBACK
+       VALIDATE PLAN
+    --------------------------------------------------- */
+
+    if (buildPlan.length === 0) {
+      return NextResponse.json(
+        {
+          error:
+            "BOMBA AI did not create any build stages.",
+        },
+        { status: 500 }
+      );
+    }
+
+    /* ---------------------------------------------------
+       NORMALIZE STAGES
+    --------------------------------------------------- */
+
+    buildPlan = buildPlan.map(
+      (stage, index) => ({
+        stage:
+          Number(stage?.stage) ||
+          index + 1,
+
+        name:
+          typeof stage?.name ===
+          "string"
+            ? stage.name
+            : `Build Stage ${index + 1}`,
+
+        description:
+          typeof stage?.description ===
+          "string"
+            ? stage.description
+            : "Continue implementing the application.",
+      })
+    );
+
+    const totalStages =
+      buildPlan.length;
+
+    /* ---------------------------------------------------
+       SAVE PLAN TO builder_projects
+    --------------------------------------------------- */
+
+    const {
+      data: savedProject,
+      error: saveError,
+    } = await supabase
+      .from("builder_projects")
+      .update({
+        build_plan: buildPlan,
+        total_stages: totalStages,
+        current_stage: 0,
+        status: "planned",
+        is_paused: false,
+        is_completed: false,
+        updated_at:
+          new Date().toISOString(),
+      })
+      .eq("id", project.id)
+      .eq("owner_id", user.id)
+      .select("*")
+      .single();
+
+    if (saveError) {
+      console.error(
+        "Build plan save error:",
+        saveError
+      );
+
+      return NextResponse.json(
+        {
+          error:
+            "The build plan was created but could not be saved.",
+          details: saveError.message,
+        },
+        { status: 500 }
+      );
+    }
+
+    /* ---------------------------------------------------
+       SUCCESS
     --------------------------------------------------- */
 
     return NextResponse.json({
       success: true,
-      completed: currentStage >= totalStages,
-      paused: false,
-      projectId: project.id,
-      currentStage,
-      totalStages,
-      projectName: project.project_name,
-      filesCreated: projectFiles.length,
+
+      projectId:
+        savedProject.id,
+
+      projectName:
+        savedProject.project_name,
+
+      buildPlan:
+        savedProject.build_plan,
+
+      build_plan:
+        savedProject.build_plan,
+
+      totalStages:
+        savedProject.total_stages,
+
+      total_stages:
+        savedProject.total_stages,
+
+      currentStage:
+        savedProject.current_stage,
+
+      status:
+        savedProject.status,
+
       message:
-        "BOMBA AI saved the latest build progress.",
+        `BOMBA AI created and saved ${totalStages} real build stages.`,
     });
   } catch (error) {
     console.error(
-      "BOMBA Builder Engine error:",
+      "BOMBA Builder Plan error:",
       error
     );
 
@@ -853,7 +513,7 @@ Return only valid JSON.
       {
         error:
           error?.message ||
-          "Something went wrong while building the project.",
+          "Something went wrong while creating the build plan.",
       },
       { status: 500 }
     );
