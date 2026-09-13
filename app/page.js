@@ -35,6 +35,11 @@ export default function Home() {
   const [builderProject, setBuilderProject] = useState(null);
   const [builderView, setBuilderView] = useState("start");
 
+  const [builderPlan, setBuilderPlan] = useState(null);
+  const [builderBuildLoading, setBuilderBuildLoading] = useState(false);
+  const [builderBuildLogs, setBuilderBuildLogs] = useState([]);
+  const [builderBuildError, setBuilderBuildError] = useState("");
+
   const fileInputRef = useRef(null);
 
   function handleImageUpload(event) {
@@ -126,85 +131,259 @@ export default function Home() {
     }
   }
 
-  
-async function startBuilder() {
-  const text = builderPrompt.trim();
+  async function startBuilder() {
+    const text = builderPrompt.trim();
 
-  if (!text) {
-    setError("Describe what you want BOMBA AI to build.");
-    return;
+    if (!text) {
+      setError("Describe what you want BOMBA AI to build.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setBuilderView("start");
+    setBuilderPlan(null);
+    setBuilderBuildLogs([]);
+    setBuilderBuildError("");
+
+    try {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseAnonKey =
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+      if (!supabaseUrl || !supabaseAnonKey) {
+        throw new Error("Supabase is not configured.");
+      }
+
+      const { createClient } = await import("@supabase/supabase-js");
+
+      const supabase = createClient(
+        supabaseUrl,
+        supabaseAnonKey
+      );
+
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError || !session) {
+        throw new Error(
+          "Please log in before starting a project."
+        );
+      }
+
+      const response = await fetch("/api/builder/projects", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          originalRequest: text,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error ||
+            "BOMBA AI could not save your project."
+        );
+      }
+
+      if (!data?.project) {
+        throw new Error(
+          "BOMBA AI did not return the created project."
+        );
+      }
+
+      setBuilderProject(data.project);
+      setBuilderView("workspace");
+    } catch (error) {
+      console.error("Builder start error:", error);
+
+      setError(
+        error?.message ||
+          "Something went wrong while starting your project."
+      );
+    } finally {
+      setLoading(false);
+    }
   }
 
-  setLoading(true);
-  setError("");
-  setBuilderView("start");
-
-  try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey =
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      throw new Error("Supabase is not configured.");
-    }
-
-    const { createClient } = await import("@supabase/supabase-js");
-
-    const supabase = createClient(
-      supabaseUrl,
-      supabaseAnonKey
-    );
-
-    const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
-
-    if (sessionError || !session) {
-      throw new Error(
-        "Please log in before starting a project."
+  async function buildBuilderProject() {
+    if (!builderProject?.id) {
+      setBuilderBuildError(
+        "No builder project is available."
       );
+      setError("No builder project is available.");
+      return;
     }
 
-    const response = await fetch("/api/builder/projects", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({
-        originalRequest: text,
-      }),
-    });
+    setBuilderBuildLoading(true);
+    setBuilderBuildError("");
+    setError("");
+    setBuilderView("build");
 
-    const data = await response.json();
+    setBuilderBuildLogs([
+      "🧠 BOMBA AI is understanding your project...",
+    ]);
 
-    if (!response.ok) {
-      throw new Error(
-        data?.error ||
-          "BOMBA AI could not save your project."
+    try {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseAnonKey =
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+      if (!supabaseUrl || !supabaseAnonKey) {
+        throw new Error("Supabase is not configured.");
+      }
+
+      const { createClient } = await import("@supabase/supabase-js");
+
+      const supabase = createClient(
+        supabaseUrl,
+        supabaseAnonKey
       );
-    }
 
-    if (!data?.project) {
-      throw new Error(
-        "BOMBA AI did not return the created project."
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError || !session) {
+        throw new Error("Please log in before building.");
+      }
+
+      let plan = builderPlan;
+
+      if (!plan) {
+        setBuilderBuildLogs((current) => [
+          ...current,
+          "📋 Creating the real project plan...",
+        ]);
+
+        const planResponse = await fetch(
+          "/api/builder/plan",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              originalRequest:
+                builderProject.original_request,
+            }),
+          }
+        );
+
+        const planData = await planResponse.json();
+
+        if (!planResponse.ok) {
+          throw new Error(
+            planData?.error ||
+              "BOMBA AI could not create the project plan."
+          );
+        }
+
+        plan = planData?.plan || planData;
+
+        if (!plan?.buildStages?.length) {
+          throw new Error(
+            "BOMBA AI did not return valid build stages."
+          );
+        }
+
+        setBuilderPlan(plan);
+
+        setBuilderBuildLogs((current) => [
+          ...current,
+          `📋 Plan ready: ${plan.buildStages.length} build stages.`,
+        ]);
+      }
+
+      const currentStage =
+        Number(builderProject.current_stage || 0) + 1;
+
+      setBuilderBuildLogs((current) => [
+        ...current,
+        `🏗️ Starting real build stage ${currentStage}...`,
+        "⚙️ BOMBA AI is generating and saving the next project work...",
+      ]);
+
+      const buildResponse = await fetch(
+        "/api/builder/build",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            projectId: builderProject.id,
+            originalRequest:
+              builderProject.original_request,
+            plan,
+          }),
+        }
       );
+
+      const buildData = await buildResponse.json();
+
+      if (!buildResponse.ok) {
+        throw new Error(
+          buildData?.error ||
+            "BOMBA AI could not build the project."
+        );
+      }
+
+      if (!buildData?.project) {
+        throw new Error(
+          "BOMBA AI did not return the updated project."
+        );
+      }
+
+      const safeProject = {
+        ...buildData.project,
+        project_files: [],
+      };
+
+      setBuilderProject(safeProject);
+
+      const stageName =
+        buildData?.stage?.stageName ||
+        `Build Stage ${currentStage}`;
+
+      const stageSummary =
+        buildData?.stage?.summary ||
+        "BOMBA AI saved the completed build stage.";
+
+      setBuilderBuildLogs((current) => [
+        ...current,
+        `✅ ${stageName} completed.`,
+        `📝 ${stageSummary}`,
+        "💾 Project progress has been saved.",
+      ]);
+    } catch (err) {
+      console.error("Builder build error:", err);
+
+      const message =
+        err?.message ||
+        "Something went wrong while building your project.";
+
+      setBuilderBuildError(message);
+
+      setBuilderBuildLogs((current) => [
+        ...current,
+        `❌ ${message}`,
+      ]);
+    } finally {
+      setBuilderBuildLoading(false);
     }
-
-    setBuilderProject(data.project);
-    setBuilderView("workspace");
-  } catch (error) {
-    console.error("Builder start error:", error);
-
-    setError(
-      error?.message ||
-        "Something went wrong while starting your project."
-    );
-  } finally {
-    setLoading(false);
   }
-}
+
   function downloadImage() {
     if (!image) return;
 
@@ -238,6 +417,10 @@ async function startBuilder() {
 
   function resetBuilder() {
     setBuilderProject(null);
+    setBuilderPlan(null);
+    setBuilderBuildLogs([]);
+    setBuilderBuildError("");
+    setBuilderBuildLoading(false);
     setBuilderView("start");
     setBuilderPrompt("");
     setError("");
@@ -284,6 +467,18 @@ async function startBuilder() {
     setMenuOpen(false);
     window.location.href = "/auth";
   }
+
+  const buildProgress =
+    builderProject?.total_stages
+      ? Math.min(
+          100,
+          Math.round(
+            ((builderProject.current_stage || 0) /
+              builderProject.total_stages) *
+              100
+          )
+        )
+      : 0;
 
   return (
     <main style={styles.page}>
@@ -458,8 +653,9 @@ async function startBuilder() {
 
               <p style={styles.builderDescription}>
                 Describe what you want to build. BOMBA AI will
-                plan it, build it gradually, save your progress,
-                and continue from where it stopped.
+                understand your request, create the project plan,
+                build it gradually, save your progress, and
+                continue from where it stopped.
               </p>
 
               <label style={styles.label}>
@@ -587,7 +783,11 @@ async function startBuilder() {
                 </div>
 
                 <div style={styles.projectStatus}>
-                  DRAFT
+                  {builderProject.is_completed
+                    ? "COMPLETED"
+                    : builderProject.current_stage
+                    ? "IN PROGRESS"
+                    : "DRAFT"}
                 </div>
               </div>
 
@@ -617,14 +817,7 @@ async function startBuilder() {
                   </div>
 
                   <div style={styles.progressPercent}>
-                    {builderProject.total_stages
-                      ? Math.round(
-                          ((builderProject.current_stage || 0) /
-                            builderProject.total_stages) *
-                            100
-                        )
-                      : 0}
-                    %
+                    {buildProgress}%
                   </div>
                 </div>
 
@@ -632,26 +825,15 @@ async function startBuilder() {
                   <div
                     style={{
                       ...styles.progressBar,
-                      width: `${
-                        builderProject.total_stages
-                          ? Math.min(
-                              100,
-                              Math.round(
-                                ((builderProject.current_stage || 0) /
-                                  builderProject.total_stages) *
-                                  100
-                              )
-                            )
-                          : 0
-                      }%`,
+                      width: `${buildProgress}%`,
                     }}
                   ></div>
                 </div>
 
                 <div style={styles.progressNote}>
-                  Your project is safely saved. The actual AI
-                  planning and gradual build engine will be
-                  connected next.
+                  {builderProject.current_stage
+                    ? "BOMBA AI has saved your latest build progress. Use BUILD to continue with the next real build stage."
+                    : "Your project is saved. Press BUILD to start the real AI build engine."}
                 </div>
               </div>
 
@@ -666,10 +848,21 @@ async function startBuilder() {
 
                 <button
                   type="button"
-                  onClick={() => setBuilderView("build")}
-                  style={styles.workspaceButtonPrimary}
+                  onClick={buildBuilderProject}
+                  disabled={builderBuildLoading}
+                  style={{
+                    ...styles.workspaceButtonPrimary,
+                    marginTop: 0,
+                    opacity: builderBuildLoading ? 0.65 : 1,
+                  }}
                 >
-                  🚀 BUILD
+                  {builderBuildLoading
+                    ? "🏗️ BUILDING..."
+                    : builderProject.is_completed
+                    ? "✓ BUILD COMPLETE"
+                    : builderProject.current_stage
+                    ? "🚀 BUILD NEXT STAGE"
+                    : "🚀 BUILD"}
                 </button>
 
                 <button
@@ -685,7 +878,7 @@ async function startBuilder() {
                   onClick={() => setBuilderView("files")}
                   style={styles.workspaceButton}
                 >
-                  💻 FILES & CODE
+                  🔒 FILES & CODE
                 </button>
               </div>
 
@@ -696,7 +889,7 @@ async function startBuilder() {
                   <strong>Project saved successfully</strong>
 
                   <div style={styles.infoText}>
-                    BOMBA AI can now continue working from this
+                    BOMBA AI can continue working from this
                     saved project.
                   </div>
                 </div>
@@ -726,57 +919,184 @@ async function startBuilder() {
                 </div>
               </div>
 
-              <div style={styles.planItem}>
-                <div style={styles.planNumber}>1</div>
+              {builderPlan ? (
+                <>
+                  {builderPlan.projectName && (
+                    <div style={styles.requestBox}>
+                      <div style={styles.boxLabel}>
+                        PROJECT
+                      </div>
 
-                <div>
-                  <strong>Project foundation</strong>
+                      <div style={styles.requestText}>
+                        {builderPlan.projectName}
+                      </div>
+                    </div>
+                  )}
 
-                  <div style={styles.stepText}>
-                    Set up the project structure and core
-                    configuration.
+                  {builderPlan.summary && (
+                    <div style={styles.planItem}>
+                      <div style={styles.planNumber}>✓</div>
+
+                      <div>
+                        <strong>Summary</strong>
+
+                        <div style={styles.stepText}>
+                          {builderPlan.summary}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {builderPlan.goal && (
+                    <div style={styles.planItem}>
+                      <div style={styles.planNumber}>◎</div>
+
+                      <div>
+                        <strong>Goal</strong>
+
+                        <div style={styles.stepText}>
+                          {builderPlan.goal}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {builderPlan.features?.map(
+                    (feature, index) => (
+                      <div
+                        key={`feature-${index}`}
+                        style={styles.planItem}
+                      >
+                        <div style={styles.planNumber}>
+                          {index + 1}
+                        </div>
+
+                        <div>
+                          <strong>
+                            {feature.name ||
+                              `Feature ${index + 1}`}
+                          </strong>
+
+                          <div style={styles.stepText}>
+                            {feature.description || ""}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  )}
+
+                  {builderPlan.pages?.map(
+                    (page, index) => (
+                      <div
+                        key={`page-${index}`}
+                        style={styles.planItem}
+                      >
+                        <div style={styles.planNumber}>
+                          {index + 1}
+                        </div>
+
+                        <div>
+                          <strong>
+                            {page.name ||
+                              `Page ${index + 1}`}
+                          </strong>
+
+                          <div style={styles.stepText}>
+                            {page.purpose || ""}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  )}
+
+                  <div
+                    style={{
+                      ...styles.boxLabel,
+                      marginTop: "18px",
+                    }}
+                  >
+                    BUILD STAGES
                   </div>
-                </div>
-              </div>
 
-              <div style={styles.planItem}>
-                <div style={styles.planNumber}>2</div>
+                  {builderPlan.buildStages?.map(
+                    (stage, index) => (
+                      <div
+                        key={`stage-${index}`}
+                        style={styles.planItem}
+                      >
+                        <div style={styles.planNumber}>
+                          {stage.stage || index + 1}
+                        </div>
 
-                <div>
-                  <strong>Core features</strong>
+                        <div>
+                          <strong>
+                            {stage.name ||
+                              `Build Stage ${index + 1}`}
+                          </strong>
 
-                  <div style={styles.stepText}>
-                    Build the main features described in the
-                    project request.
+                          <div style={styles.stepText}>
+                            {stage.description || ""}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  )}
+                </>
+              ) : (
+                <>
+                  <div style={styles.planItem}>
+                    <div style={styles.planNumber}>1</div>
+
+                    <div>
+                      <strong>AI project planning</strong>
+
+                      <div style={styles.stepText}>
+                        BOMBA AI will create the actual plan when
+                        the build starts.
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
 
-              <div style={styles.planItem}>
-                <div style={styles.planNumber}>3</div>
+                  <div style={styles.planItem}>
+                    <div style={styles.planNumber}>2</div>
 
-                <div>
-                  <strong>User interface</strong>
+                    <div>
+                      <strong>Project foundation</strong>
 
-                  <div style={styles.stepText}>
-                    Create a responsive and mobile-friendly
-                    interface.
+                      <div style={styles.stepText}>
+                        Set up the project structure and core
+                        configuration.
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
 
-              <div style={styles.planItem}>
-                <div style={styles.planNumber}>4</div>
+                  <div style={styles.planItem}>
+                    <div style={styles.planNumber}>3</div>
 
-                <div>
-                  <strong>Testing and improvement</strong>
+                    <div>
+                      <strong>Core features</strong>
 
-                  <div style={styles.stepText}>
-                    Test the project and continue improving it
-                    during future build sessions.
+                      <div style={styles.stepText}>
+                        Build the main features described in the
+                        project request.
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
+
+                  <div style={styles.planItem}>
+                    <div style={styles.planNumber}>4</div>
+
+                    <div>
+                      <strong>Testing and improvement</strong>
+
+                      <div style={styles.stepText}>
+                        Test the project and continue improving it
+                        during future build sessions.
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
 
               <button
                 type="button"
@@ -797,23 +1117,73 @@ async function startBuilder() {
                   </div>
 
                   <h2 style={styles.workspaceTitle}>
-                    Ready to Build
+                    {builderBuildLoading
+                      ? "BOMBA AI is building"
+                      : builderProject.is_completed
+                      ? "Build Complete"
+                      : "Build Stage"}
                   </h2>
+                </div>
+
+                <div style={styles.projectStatus}>
+                  {builderBuildLoading
+                    ? "WORKING"
+                    : builderProject.is_completed
+                    ? "DONE"
+                    : "SAVED"}
                 </div>
               </div>
 
               <div style={styles.sessionCard}>
-                <div style={styles.sessionIcon}>🚀</div>
+                <div style={styles.sessionIcon}>
+                  {builderBuildLoading
+                    ? "🏗️"
+                    : builderProject.is_completed
+                    ? "✅"
+                    : "🚀"}
+                </div>
 
                 <h3 style={styles.sessionTitle}>
-                  Your project is ready for the build engine
+                  {builderBuildLoading
+                    ? "BOMBA AI is working on your project"
+                    : builderProject.is_completed
+                    ? "Your project build is complete"
+                    : "The latest build stage is saved"}
                 </h3>
 
                 <p style={styles.sessionText}>
-                  The project has been saved successfully.
-                  The 3-minute build session engine will be
-                  connected in the next step.
+                  {builderBuildLoading
+                    ? "BOMBA AI is performing the actual build work. This screen updates when the real build stage finishes."
+                    : builderProject.is_completed
+                    ? "All currently planned build stages have been completed."
+                    : "Your project can continue from the exact saved stage."}
                 </p>
+
+                {builderBuildLogs.length > 0 && (
+                  <div style={styles.buildLogBox}>
+                    {builderBuildLogs.map((log, index) => (
+                      <div
+                        key={`${log}-${index}`}
+                        style={styles.buildLogItem}
+                      >
+                        {log}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {builderBuildError && (
+                  <div style={styles.error}>
+                    {builderBuildError}
+                  </div>
+                )}
+
+                <div style={styles.sessionRule}>
+                  <strong>Current stage:</strong>{" "}
+                  {builderProject.current_stage || 0}
+                  {" / "}
+                  {builderProject.total_stages || 0}
+                </div>
 
                 <div style={styles.sessionRule}>
                   <strong>Build session:</strong> 3 minutes
@@ -827,6 +1197,24 @@ async function startBuilder() {
                   <strong>Continue:</strong> from the exact saved stage
                 </div>
               </div>
+
+              {!builderBuildLoading && (
+                <button
+                  type="button"
+                  onClick={buildBuilderProject}
+                  disabled={builderProject.is_completed}
+                  style={{
+                    ...styles.workspaceButtonPrimary,
+                    opacity: builderProject.is_completed
+                      ? 0.5
+                      : 1,
+                  }}
+                >
+                  {builderProject.is_completed
+                    ? "✓ ALL STAGES COMPLETE"
+                    : "🚀 BUILD NEXT STAGE"}
+                </button>
+              )}
 
               <button
                 type="button"
@@ -863,8 +1251,9 @@ async function startBuilder() {
                 </h3>
 
                 <p>
-                  Your project preview will appear here as BOMBA
-                  builds the actual application.
+                  {builderProject.current_stage
+                    ? "The project is being built from the saved stages. A functional preview will appear as the application build is completed."
+                    : "Your project preview will appear here as BOMBA builds the actual application."}
                 </p>
               </div>
 
@@ -893,14 +1282,21 @@ async function startBuilder() {
               </div>
 
               <div style={styles.fileEmpty}>
-                <div style={styles.fileIcon}>💻</div>
+                <div style={styles.fileIcon}>🔒</div>
 
-                <h3>Files will appear here</h3>
+                <h3>Source Code Locked</h3>
 
                 <p>
-                  BOMBA AI will generate the actual project
-                  files and code as the build engine progresses.
+                  BOMBA AI protects the generated project source
+                  code and ZIP from normal users. The build engine
+                  can continue creating project files while the
+                  source remains protected.
                 </p>
+
+                <div style={styles.lockedNotice}>
+                  🔐 Source code and ZIP release will be controlled
+                  later by the authorized release system.
+                </div>
               </div>
 
               <button
@@ -1747,6 +2143,36 @@ const styles = {
     marginTop: "7px",
     color: "#bdbdbd",
     fontSize: "11px",
+  },
+
+  buildLogBox: {
+    marginTop: "18px",
+    textAlign: "left",
+    background: "#050505",
+    border: "1px solid #252525",
+    borderRadius: "11px",
+    padding: "11px",
+    maxHeight: "300px",
+    overflowY: "auto",
+  },
+
+  buildLogItem: {
+    padding: "8px 6px",
+    borderBottom: "1px solid #181818",
+    color: "#cfcfcf",
+    fontSize: "11px",
+    lineHeight: 1.5,
+  },
+
+  lockedNotice: {
+    marginTop: "14px",
+    padding: "11px",
+    borderRadius: "9px",
+    background: "#171406",
+    border: "1px solid #4b411d",
+    color: "#FFD43B",
+    fontSize: "10px",
+    lineHeight: 1.5,
   },
 
   previewBuilder: {
