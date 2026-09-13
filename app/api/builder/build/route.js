@@ -15,6 +15,9 @@ const openai = new OpenAI({
 const BUILD_SESSION_MINUTES = 3;
 const COOLDOWN_HOURS = 10;
 
+// Keep a small safety margin below the platform's 180-second limit.
+const MAX_ENGINE_RUNTIME_MS = 170000;
+
 function getNow() {
   return new Date();
 }
@@ -29,10 +32,12 @@ function addHours(date, hours) {
 
 function parseJsonFromAI(content) {
   if (!content) {
-    throw new Error("The AI build engine returned an empty response.");
+    throw new Error(
+      "The AI build engine returned an empty response."
+    );
   }
 
-  let cleaned = content.trim();
+  let cleaned = String(content).trim();
 
   if (cleaned.startsWith("```")) {
     cleaned = cleaned
@@ -49,23 +54,33 @@ function parseJsonFromAI(content) {
     const lastBrace = cleaned.lastIndexOf("}");
 
     if (firstBrace !== -1 && lastBrace !== -1) {
-      const possibleJson = cleaned.slice(firstBrace, lastBrace + 1);
+      const possibleJson = cleaned.slice(
+        firstBrace,
+        lastBrace + 1
+      );
 
       try {
         return JSON.parse(possibleJson);
       } catch (innerError) {
-        console.error("AI JSON parse error:", innerError);
+        console.error(
+          "AI JSON parse error:",
+          innerError
+        );
       }
     }
 
-    throw new Error("The AI build engine returned invalid JSON.");
+    throw new Error(
+      "The AI build engine returned invalid JSON."
+    );
   }
 }
 
 function mergeProjectFiles(existingFiles, newFiles) {
   const map = new Map();
 
-  for (const file of Array.isArray(existingFiles) ? existingFiles : []) {
+  for (const file of Array.isArray(existingFiles)
+    ? existingFiles
+    : []) {
     if (
       file &&
       typeof file.path === "string" &&
@@ -75,7 +90,9 @@ function mergeProjectFiles(existingFiles, newFiles) {
     }
   }
 
-  for (const file of Array.isArray(newFiles) ? newFiles : []) {
+  for (const file of Array.isArray(newFiles)
+    ? newFiles
+    : []) {
     if (
       file &&
       typeof file.path === "string" &&
@@ -91,12 +108,22 @@ function mergeProjectFiles(existingFiles, newFiles) {
   return Array.from(map.values());
 }
 
+function getRemainingSessionSeconds(sessionEndsAt) {
+  return Math.max(
+    0,
+    Math.floor(
+      (sessionEndsAt.getTime() - Date.now()) / 1000
+    )
+  );
+}
+
 export async function POST(req) {
   try {
     if (!supabaseUrl || !supabaseAnonKey) {
       return NextResponse.json(
         {
-          error: "Supabase environment variables are not configured.",
+          error:
+            "Supabase environment variables are not configured.",
         },
         { status: 500 }
       );
@@ -105,7 +132,8 @@ export async function POST(req) {
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
         {
-          error: "OpenAI API key is not configured.",
+          error:
+            "OpenAI API key is not configured.",
         },
         { status: 500 }
       );
@@ -116,7 +144,8 @@ export async function POST(req) {
     if (!authHeader) {
       return NextResponse.json(
         {
-          error: "Please log in before building your project.",
+          error:
+            "Please log in before building your project.",
         },
         { status: 401 }
       );
@@ -148,7 +177,8 @@ export async function POST(req) {
     if (!originalRequest) {
       return NextResponse.json(
         {
-          error: "The original project request is missing.",
+          error:
+            "The original project request is missing.",
         },
         { status: 400 }
       );
@@ -157,7 +187,8 @@ export async function POST(req) {
     if (!plan || typeof plan !== "object") {
       return NextResponse.json(
         {
-          error: "A valid project plan is required before building.",
+          error:
+            "A valid project plan is required before building.",
         },
         { status: 400 }
       );
@@ -170,7 +201,8 @@ export async function POST(req) {
     if (stages.length === 0) {
       return NextResponse.json(
         {
-          error: "The project plan does not contain any build stages.",
+          error:
+            "The project plan does not contain any build stages.",
         },
         { status: 400 }
       );
@@ -196,44 +228,59 @@ export async function POST(req) {
     if (userError || !user) {
       return NextResponse.json(
         {
-          error: "Your login session could not be verified.",
+          error:
+            "Your login session could not be verified.",
         },
         { status: 401 }
       );
     }
 
-    const { data: project, error: projectError } = await supabase
-      .from("builder_projects")
-      .select("*")
-      .eq("id", projectId)
-      .eq("owner_id", user.id)
-      .single();
+    const { data: project, error: projectError } =
+      await supabase
+        .from("builder_projects")
+        .select("*")
+        .eq("id", projectId)
+        .eq("owner_id", user.id)
+        .single();
 
     if (projectError || !project) {
-      console.error("Builder project lookup error:", projectError);
+      console.error(
+        "Builder project lookup error:",
+        projectError
+      );
 
       return NextResponse.json(
         {
-          error: "The builder project could not be found.",
+          error:
+            "The builder project could not be found.",
         },
         { status: 404 }
       );
     }
 
-    const now = getNow();
+    let now = getNow();
 
-    const currentStage =
-      Number.isInteger(project.current_stage)
-        ? project.current_stage
-        : 0;
+    let currentStage = Number.isInteger(
+      project.current_stage
+    )
+      ? project.current_stage
+      : 0;
 
     const totalStages = stages.length;
 
-    if (project.is_completed || currentStage >= totalStages) {
+    /*
+     * PROJECT ALREADY COMPLETE
+     */
+    if (
+      project.is_completed ||
+      currentStage >= totalStages
+    ) {
       return NextResponse.json({
         success: true,
         completed: true,
-        message: "This project has already completed all build stages.",
+        paused: false,
+        message:
+          "This project has already completed all build stages.",
         project: {
           ...project,
           project_files: [],
@@ -241,17 +288,26 @@ export async function POST(req) {
       });
     }
 
+    /*
+     * COOLDOWN CHECK
+     */
     if (
       project.cooldown_ends_at &&
       new Date(project.cooldown_ends_at) > now
     ) {
-      const cooldownEnds = new Date(project.cooldown_ends_at);
+      const cooldownEnds = new Date(
+        project.cooldown_ends_at
+      );
 
       return NextResponse.json(
         {
+          success: false,
+          paused: true,
+          completed: false,
           error:
             "Your build session is on cooldown. Please continue when the next build session opens.",
-          cooldownEndsAt: cooldownEnds.toISOString(),
+          cooldownEndsAt:
+            cooldownEnds.toISOString(),
           project: {
             ...project,
             project_files: [],
@@ -261,13 +317,18 @@ export async function POST(req) {
       );
     }
 
-    let sessionStartedAt = project.build_session_started_at
-      ? new Date(project.build_session_started_at)
-      : null;
+    /*
+     * START OR CONTINUE BUILD SESSION
+     */
+    let sessionStartedAt =
+      project.build_session_started_at
+        ? new Date(project.build_session_started_at)
+        : null;
 
-    let sessionEndsAt = project.build_session_ends_at
-      ? new Date(project.build_session_ends_at)
-      : null;
+    let sessionEndsAt =
+      project.build_session_ends_at
+        ? new Date(project.build_session_ends_at)
+        : null;
 
     const sessionIsActive =
       sessionStartedAt &&
@@ -276,12 +337,16 @@ export async function POST(req) {
 
     if (!sessionIsActive) {
       sessionStartedAt = now;
+
       sessionEndsAt = addMinutes(
         now,
         BUILD_SESSION_MINUTES
       );
     }
 
+    /*
+     * SAFETY CHECK
+     */
     if (now >= sessionEndsAt) {
       const cooldownEndsAt = addHours(
         now,
@@ -317,6 +382,7 @@ export async function POST(req) {
       return NextResponse.json({
         success: true,
         paused: true,
+        completed: false,
         message:
           "The 3-minute build session has ended. Your project is safely saved and will continue after the cooldown.",
         cooldownEndsAt:
@@ -328,51 +394,98 @@ export async function POST(req) {
       });
     }
 
-    const stageIndex = currentStage;
-    const stage = stages[stageIndex];
-
-    if (!stage) {
-      return NextResponse.json(
-        {
-          error: "The next build stage could not be found.",
-        },
-        { status: 500 }
-      );
-    }
-
-    const stageNumber =
-      Number(stage.stage) || stageIndex + 1;
-
-    const previousFiles = Array.isArray(project.project_files)
+    /*
+     * KEEP THE CURRENT FILES IN MEMORY.
+     */
+    let projectFiles = Array.isArray(
+      project.project_files
+    )
       ? project.project_files
       : [];
 
-    const previousFileSummary = previousFiles
-      .map((file) => {
-        if (!file?.path) return "";
-        return `- ${file.path}`;
-      })
-      .filter(Boolean)
-      .join("\n");
+    let lastStage = null;
+    let stagesCompletedThisRequest = 0;
 
-    const previousFilesContext =
-      previousFileSummary ||
-      "No project files have been created yet.";
+    /*
+     * AUTOMATIC BUILD LOOP
+     *
+     * This is the major change.
+     *
+     * The server automatically continues from one stage
+     * to the next while the real build session is active.
+     */
+    while (
+      currentStage < totalStages
+    ) {
+      now = getNow();
 
-    const remainingMinutes = Math.max(
-      0,
-      Math.ceil(
-        (sessionEndsAt.getTime() - now.getTime()) /
-          60000
-      )
-    );
+      const engineRuntime =
+        now.getTime() -
+        new Date(
+          project.updated_at || now
+        ).getTime();
 
-    const buildPrompt = `
+      const sessionRemainingSeconds =
+        getRemainingSessionSeconds(
+          sessionEndsAt
+        );
+
+      /*
+       * Stop before the platform/runtime limit.
+       */
+      if (
+        engineRuntime >=
+        MAX_ENGINE_RUNTIME_MS
+      ) {
+        break;
+      }
+
+      /*
+       * Stop when the real 3-minute build window ends.
+       */
+      if (sessionRemainingSeconds <= 5) {
+        break;
+      }
+
+      const stageIndex = currentStage;
+      const stage = stages[stageIndex];
+
+      if (!stage) {
+        break;
+      }
+
+      const stageNumber =
+        Number(stage.stage) ||
+        stageIndex + 1;
+
+      const previousFileSummary =
+        projectFiles
+          .map((file) => {
+            if (!file?.path) return "";
+            return `- ${file.path}`;
+          })
+          .filter(Boolean)
+          .join("\n");
+
+      const previousFilesContext =
+        previousFileSummary ||
+        "No project files have been created yet.";
+
+      const remainingMinutes = Math.max(
+        0,
+        Math.ceil(
+          getRemainingSessionSeconds(
+            sessionEndsAt
+          ) / 60
+        )
+      );
+
+      const buildPrompt = `
 You are the REAL BUILD ENGINE for BOMBA AI.
 
 You are not a planning assistant.
 
-You are responsible for actually building the user's software project one stage at a time.
+You are actually building a real software project one stage at a time.
 
 USER'S ORIGINAL REQUEST:
 ${originalRequest}
@@ -387,16 +500,32 @@ PROJECT GOAL:
 ${plan.goal || ""}
 
 FEATURES:
-${JSON.stringify(plan.features || [], null, 2)}
+${JSON.stringify(
+  plan.features || [],
+  null,
+  2
+)}
 
 PAGES:
-${JSON.stringify(plan.pages || [], null, 2)}
+${JSON.stringify(
+  plan.pages || [],
+  null,
+  2
+)}
 
 USER ROLES:
-${JSON.stringify(plan.userRoles || [], null, 2)}
+${JSON.stringify(
+  plan.userRoles || [],
+  null,
+  2
+)}
 
 ALL BUILD STAGES:
-${JSON.stringify(stages, null, 2)}
+${JSON.stringify(
+  stages,
+  null,
+  2
+)}
 
 CURRENT BUILD STAGE:
 Stage ${stageNumber} of ${totalStages}
@@ -410,46 +539,44 @@ ${stage.description || ""}
 FILES ALREADY CREATED:
 ${previousFilesContext}
 
-BUILD SESSION:
-There are approximately ${remainingMinutes} minute(s) remaining in the current real build session.
+REAL BUILD SESSION:
+Approximately ${remainingMinutes} minute(s) remain in this real build session.
 
 YOUR JOB:
 
-Actually build this stage.
-
-Do not merely explain what should be built.
+Actually build the current stage.
 
 Create or modify real project files.
 
-The application must be a functional browser-based web application.
+The application must be functional, organized and usable.
 
-Prefer a simple, reliable architecture that can run as a standalone web application.
+Prefer simple, reliable browser technology.
 
-Use HTML, CSS, and JavaScript where appropriate.
+Use HTML, CSS and JavaScript where appropriate.
 
-If the project requires multiple pages, create the necessary files.
+If previous files exist, preserve their working functionality and extend them.
 
-If previous files already exist, preserve them and improve or extend them instead of unnecessarily replacing working functionality.
+Do not unnecessarily delete working functionality.
 
-Create professional, organized, responsive interfaces.
+Create professional, responsive interfaces.
 
-Use realistic sample data when needed so the application can be previewed immediately.
+Use realistic sample data where appropriate.
 
-Do not put BOMBA AI branding inside the generated application unless the user's request specifically asks for it.
+Do not put BOMBA AI branding inside the generated application unless requested by the user.
 
-Do not create fake progress functionality.
-
-Do not claim that a file was created unless you actually provide that file in the response.
+Do not create fake progress bars or fake build activity.
 
 For this stage, return every file that was created or modified.
 
-The response MUST be valid JSON only.
+Every returned file must contain its COMPLETE contents.
 
-Use this exact structure:
+The output must be valid JSON.
+
+Use EXACTLY this structure:
 
 {
-  "stageName": "name of completed stage",
-  "summary": "short explanation of what was actually built",
+  "stageName": "completed stage name",
+  "summary": "what was actually built",
   "files": [
     {
       "path": "relative/path/to/file.html",
@@ -460,109 +587,147 @@ Use this exact structure:
 
 IMPORTANT:
 
-- Return complete file contents, not snippets.
-- Every file must be usable as provided.
+- Return complete files.
+- Do not return snippets.
 - Do not use markdown code fences.
-- Do not return commentary outside the JSON.
-- Do not return an empty files array unless the stage genuinely requires no file changes.
+- Do not return commentary outside JSON.
+- Do not return an empty files array unless absolutely necessary.
 `;
 
-    console.log(
-      `[BOMBA BUILD] Starting stage ${stageNumber}/${totalStages}: ${stage.name}`
-    );
-
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      temperature: 0.2,
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are BOMBA AI's real software build engine. Return only valid JSON and actually create the requested files.",
-        },
-        {
-          role: "user",
-          content: buildPrompt,
-        },
-      ],
-    });
-
-    const content =
-      response.choices?.[0]?.message?.content;
-
-    const buildResult = parseJsonFromAI(content);
-
-    const newFiles = Array.isArray(buildResult.files)
-      ? buildResult.files
-      : [];
-
-    if (newFiles.length === 0) {
-      throw new Error(
-        "The AI build engine completed the stage without returning any files."
-      );
-    }
-
-    const mergedFiles = mergeProjectFiles(
-      previousFiles,
-      newFiles
-    );
-
-    const nextStage = currentStage + 1;
-    const completed = nextStage >= totalStages;
-
-    const updatedAt = getNow();
-
-    let cooldownEndsAt = null;
-    let nextStatus = "building";
-    let isPaused = false;
-
-    if (completed) {
-      nextStatus = "completed";
-    } else if (updatedAt >= sessionEndsAt) {
-      cooldownEndsAt = addHours(
-        updatedAt,
-        COOLDOWN_HOURS
+      console.log(
+        `[BOMBA BUILD] Starting stage ${stageNumber}/${totalStages}`
       );
 
-      nextStatus = "paused";
-      isPaused = true;
-    }
+      let response;
 
-    const updateData = {
-      project_name:
-        plan.projectName ||
-        project.project_name ||
-        "BOMBA Project",
+      try {
+        response =
+          await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            temperature: 0.1,
+            response_format: {
+              type: "json_object",
+            },
+            messages: [
+              {
+                role: "system",
+                content:
+                  "You are BOMBA AI's real software build engine. Return ONLY valid JSON. Actually create the requested files.",
+              },
+              {
+                role: "user",
+                content: buildPrompt,
+              },
+            ],
+          });
+      } catch (aiError) {
+        console.error(
+          `[BOMBA BUILD] AI error on stage ${stageNumber}:`,
+          aiError
+        );
 
-      build_plan: stages,
+        throw new Error(
+          aiError?.message ||
+            `The AI build engine failed on stage ${stageNumber}.`
+        );
+      }
 
-      project_files: mergedFiles,
+      const content =
+        response.choices?.[0]?.message?.content;
 
-      current_stage: nextStage,
+      const buildResult =
+        parseJsonFromAI(content);
 
-      total_stages: totalStages,
+      const newFiles = Array.isArray(
+        buildResult.files
+      )
+        ? buildResult.files
+        : [];
 
-      status: nextStatus,
+      if (newFiles.length === 0) {
+        throw new Error(
+          `Stage ${stageNumber} completed without returning any project files.`
+        );
+      }
 
-      build_session_started_at:
-        sessionStartedAt.toISOString(),
+      /*
+       * MERGE THE NEW FILES INTO THE PROJECT.
+       */
+      projectFiles = mergeProjectFiles(
+        projectFiles,
+        newFiles
+      );
 
-      build_session_ends_at:
-        sessionEndsAt.toISOString(),
+      const nextStage =
+        currentStage + 1;
 
-      cooldown_ends_at: cooldownEndsAt
-        ? cooldownEndsAt.toISOString()
-        : null,
+      const completed =
+        nextStage >= totalStages;
 
-      is_paused: isPaused,
+      now = getNow();
 
-      is_completed: completed,
+      let nextStatus = "building";
+      let isPaused = false;
+      let cooldownEndsAt = null;
 
-      updated_at: updatedAt.toISOString(),
-    };
+      if (completed) {
+        nextStatus = "completed";
+        isPaused = false;
+      } else if (now >= sessionEndsAt) {
+        cooldownEndsAt = addHours(
+          now,
+          COOLDOWN_HOURS
+        );
 
-    const { data: updatedProject, error: updateError } =
-      await supabase
+        nextStatus = "paused";
+        isPaused = true;
+      }
+
+      /*
+       * SAVE AFTER EVERY STAGE.
+       *
+       * This is important because if the server stops,
+       * the project still knows exactly where it stopped.
+       */
+      const updateData = {
+        project_name:
+          plan.projectName ||
+          project.project_name ||
+          "BOMBA Project",
+
+        build_plan: stages,
+
+        project_files: projectFiles,
+
+        current_stage: nextStage,
+
+        total_stages: totalStages,
+
+        status: nextStatus,
+
+        build_session_started_at:
+          sessionStartedAt.toISOString(),
+
+        build_session_ends_at:
+          sessionEndsAt.toISOString(),
+
+        cooldown_ends_at:
+          cooldownEndsAt
+            ? cooldownEndsAt.toISOString()
+            : null,
+
+        is_paused: isPaused,
+
+        is_completed: completed,
+
+        updated_at:
+          now.toISOString(),
+      };
+
+      const {
+        data: savedProject,
+        error: updateError,
+      } = await supabase
         .from("builder_projects")
         .update(updateData)
         .eq("id", project.id)
@@ -570,38 +735,25 @@ IMPORTANT:
         .select()
         .single();
 
-    if (updateError) {
-      console.error(
-        "Builder project update error:",
-        updateError
-      );
+      if (updateError) {
+        console.error(
+          "Builder project update error:",
+          updateError
+        );
 
-      return NextResponse.json(
-        {
-          error:
-            updateError.message ||
-            "The build stage was created but could not be saved.",
-        },
-        { status: 500 }
-      );
-    }
+        return NextResponse.json(
+          {
+            error:
+              updateError.message ||
+              "The build stage was created but could not be saved.",
+          },
+          { status: 500 }
+        );
+      }
 
-    console.log(
-      `[BOMBA BUILD] Completed stage ${stageNumber}/${totalStages}`
-    );
+      currentStage = nextStage;
 
-    /*
-     * IMPORTANT:
-     * The browser receives build metadata, not the actual source code.
-     * The generated files remain stored in Supabase.
-     */
-
-    return NextResponse.json({
-      success: true,
-
-      completed,
-
-      stage: {
+      lastStage = {
         number: stageNumber,
         name:
           buildResult.stageName ||
@@ -611,49 +763,190 @@ IMPORTANT:
           buildResult.summary ||
           stage.description ||
           "",
-      },
+      };
 
-      nextStage: completed
-        ? null
-        : nextStage + 1,
+      stagesCompletedThisRequest += 1;
 
-      totalStages,
+      console.log(
+        `[BOMBA BUILD] Completed stage ${stageNumber}/${totalStages}`
+      );
 
-      session: {
-        startedAt:
-          sessionStartedAt.toISOString(),
-        endsAt:
-          sessionEndsAt.toISOString(),
-        remainingMinutes: Math.max(
-          0,
-          Math.ceil(
-            (sessionEndsAt.getTime() -
-              updatedAt.getTime()) /
-              60000
-          ),
-        ),
-      },
+      /*
+       * PROJECT IS FINISHED.
+       */
+      if (completed) {
+        return NextResponse.json({
+          success: true,
+          completed: true,
+          paused: false,
+
+          message:
+            "BOMBA AI has completed the entire project.",
+
+          stagesCompletedThisRequest,
+
+          lastStage,
+
+          nextStage: null,
+
+          totalStages,
+
+          session: {
+            startedAt:
+              sessionStartedAt.toISOString(),
+            endsAt:
+              sessionEndsAt.toISOString(),
+            remainingMinutes: Math.max(
+              0,
+              Math.ceil(
+                getRemainingSessionSeconds(
+                  sessionEndsAt
+                ) / 60
+              )
+            ),
+          },
+
+          project: {
+            id: savedProject.id,
+            project_name:
+              savedProject.project_name,
+            current_stage:
+              savedProject.current_stage,
+            total_stages:
+              savedProject.total_stages,
+            status:
+              savedProject.status,
+            is_paused:
+              savedProject.is_paused,
+            is_completed:
+              savedProject.is_completed,
+            build_session_started_at:
+              savedProject.build_session_started_at,
+            build_session_ends_at:
+              savedProject.build_session_ends_at,
+            cooldown_ends_at:
+              savedProject.cooldown_ends_at,
+          },
+        });
+      }
+
+      /*
+       * If the 3-minute session ended immediately after
+       * saving this stage, pause safely.
+       */
+      if (now >= sessionEndsAt) {
+        const cooldownEndsAt =
+          addHours(
+            now,
+            COOLDOWN_HOURS
+          );
+
+        const {
+          data: pausedProject,
+          error: pauseError,
+        } = await supabase
+          .from("builder_projects")
+          .update({
+            status: "paused",
+            is_paused: true,
+            cooldown_ends_at:
+              cooldownEndsAt.toISOString(),
+            updated_at:
+              now.toISOString(),
+          })
+          .eq("id", project.id)
+          .eq("owner_id", user.id)
+          .select()
+          .single();
+
+        if (pauseError) {
+          console.error(
+            "Automatic pause error:",
+            pauseError
+          );
+        }
+
+        return NextResponse.json({
+          success: true,
+          completed: false,
+          paused: true,
+
+          message:
+            "The real build session ended. BOMBA AI safely saved the latest completed stage.",
+
+          stagesCompletedThisRequest,
+
+          lastStage,
+
+          cooldownEndsAt:
+            cooldownEndsAt.toISOString(),
+
+          project: {
+            ...(pausedProject || project),
+            project_files: [],
+          },
+        });
+      }
+
+      /*
+       * Otherwise the WHILE LOOP automatically starts
+       * the next stage.
+       */
+    }
+
+    /*
+     * If we reach here, the runtime/session budget ended
+     * before the complete project was finished.
+     */
+    now = getNow();
+
+    const cooldownEndsAt =
+      addHours(
+        now,
+        COOLDOWN_HOURS
+      );
+
+    const { data: pausedProject, error: pauseError } =
+      await supabase
+        .from("builder_projects")
+        .update({
+          status: "paused",
+          is_paused: true,
+          cooldown_ends_at:
+            cooldownEndsAt.toISOString(),
+          updated_at:
+            now.toISOString(),
+        })
+        .eq("id", project.id)
+        .eq("owner_id", user.id)
+        .select()
+        .single();
+
+    if (pauseError) {
+      console.error(
+        "Final automatic pause error:",
+        pauseError
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      completed: false,
+      paused: true,
+
+      message:
+        "BOMBA AI saved the latest completed build stage. The remaining stages will continue in the next build session.",
+
+      stagesCompletedThisRequest,
+
+      lastStage,
+
+      cooldownEndsAt:
+        cooldownEndsAt.toISOString(),
 
       project: {
-        id: updatedProject.id,
-        project_name:
-          updatedProject.project_name,
-        current_stage:
-          updatedProject.current_stage,
-        total_stages:
-          updatedProject.total_stages,
-        status:
-          updatedProject.status,
-        is_paused:
-          updatedProject.is_paused,
-        is_completed:
-          updatedProject.is_completed,
-        build_session_started_at:
-          updatedProject.build_session_started_at,
-        build_session_ends_at:
-          updatedProject.build_session_ends_at,
-        cooldown_ends_at:
-          updatedProject.cooldown_ends_at,
+        ...(pausedProject || project),
+        project_files: [],
       },
     });
   } catch (error) {
