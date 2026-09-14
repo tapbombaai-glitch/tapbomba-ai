@@ -25,7 +25,6 @@ export default function Home() {
 
   const [prompt, setPrompt] = useState("");
   const [image, setImage] = useState("");
-  const [uploadedImage, setUploadedImage] = useState("");
   const [uploadedImages, setUploadedImages] = useState([]);
 const [photoSize, setPhotoSize] = useState("medium");
 const [photoPositions, setPhotoPositions] = useState([
