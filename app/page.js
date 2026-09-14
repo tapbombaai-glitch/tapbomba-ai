@@ -237,8 +237,6 @@ export default function Home() {
               )
             : null,
 
-          // Kept for compatibility with the current
-          // single-image backend until it is updated.
           referenceImage:
             uploadedImages[0]?.image || null,
 
@@ -2025,43 +2023,119 @@ export default function Home() {
                     </div>
 
                     <h2 style={styles.workspaceTitle}>
-                      Project Preview
+                      {builderProject.project_name ||
+                        "Project Preview"}
                     </h2>
                   </div>
-                </div>
 
-                <div style={styles.previewBuilder}>
-                  <div style={styles.previewBuilderLogo}>
-                    TB
+                  <div style={styles.projectStatus}>
+                    {buildCompleted
+                      ? "READY"
+                      : "BUILDING"}
                   </div>
-
-                  <h3>
-                    {builderProject.project_name ||
-                      "Your BOMBA Project"}
-                  </h3>
-
-                  {buildCompleted ? (
-                    <p>
-                      The build stages are complete.
-                      Generated project files are preserved
-                      and ready for the real preview engine.
-                    </p>
-                  ) : (
-                    <p>
-                      BOMBA AI is still building this
-                      application. The preview will use the
-                      generated project files as the Builder
-                      stages are completed.
-                    </p>
-                  )}
                 </div>
+
+                {Array.isArray(
+                  builderProject.project_files
+                ) &&
+                builderProject.project_files.length > 0 ? (
+                  (() => {
+                    const htmlFile =
+                      builderProject.project_files.find(
+                        (file) =>
+                          file?.path
+                            ?.toLowerCase()
+                            .replace(/\\/g, "/") ===
+                          "index.html"
+                      );
+
+                    if (!htmlFile?.content) {
+                      return (
+                        <div
+                          style={styles.previewBuilder}
+                        >
+                          <div
+                            style={
+                              styles.previewBuilderLogo
+                            }
+                          >
+                            TB
+                          </div>
+
+                          <h3>
+                            Preview is not ready yet
+                          </h3>
+
+                          <p>
+                            BOMBA AI has generated
+                            project files, but an
+                            index.html preview file is
+                            not available yet.
+                          </p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div
+                        style={{
+                          background: "#ffffff",
+                          border: "1px solid #242424",
+                          borderRadius: "14px",
+                          overflow: "hidden",
+                          width: "100%",
+                        }}
+                      >
+                        <iframe
+                          title="BOMBA AI Project Preview"
+                          srcDoc={htmlFile.content}
+                          style={{
+                            width: "100%",
+                            minHeight: "650px",
+                            height: "75vh",
+                            border: "none",
+                            display: "block",
+                            background: "#ffffff",
+                          }}
+                          sandbox="allow-scripts allow-forms"
+                        />
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <div
+                    style={styles.previewBuilder}
+                  >
+                    <div
+                      style={
+                        styles.previewBuilderLogo
+                      }
+                    >
+                      TB
+                    </div>
+
+                    <h3>
+                      {buildCompleted
+                        ? "Preview files not found"
+                        : "Your app is still being built"}
+                    </h3>
+
+                    <p>
+                      {buildCompleted
+                        ? "The build is complete, but no generated project files are available for preview."
+                        : "Complete more BUILD stages and BOMBA AI will use the generated project files for the live preview."}
+                    </p>
+                  </div>
+                )}
 
                 <button
                   type="button"
                   onClick={() =>
                     setBuilderView("workspace")
                   }
-                  style={styles.workspaceButtonPrimary}
+                  style={
+                    styles.workspaceButtonPrimary
+                  }
                 >
                   ← BACK TO WORKSPACE
                 </button>
