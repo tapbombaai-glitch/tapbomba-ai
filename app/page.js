@@ -54,22 +54,55 @@ export default function Home() {
 
   const fileInputRef = useRef(null);
 
+  /*
+   * BUILD STATUS
+   * Kept above buildBuilderProject so the build function
+   * always has access to the current project status.
+   */
+  const totalStages = Number(
+    builderProject?.total_stages || 0
+  );
+
+  const currentStage = Number(
+    builderProject?.current_stage || 0
+  );
+
+  const progressPercent = totalStages
+    ? Math.min(
+        100,
+        Math.round(
+          (currentStage / totalStages) * 100
+        )
+      )
+    : 0;
+
+  const buildCompleted =
+    builderProject?.is_completed === true ||
+    (totalStages > 0 &&
+      currentStage >= totalStages);
+
   function handleImageUpload(event) {
     const files = Array.from(event.target.files || []);
 
     if (!files.length) return;
 
-    const remainingSlots = 3 - uploadedImages.length;
+    const remainingSlots =
+      3 - uploadedImages.length;
 
     if (remainingSlots <= 0) {
       setError("You can upload up to 3 images.");
+
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
+
       return;
     }
 
-    const selectedFiles = files.slice(0, remainingSlots);
+    const selectedFiles = files.slice(
+      0,
+      remainingSlots
+    );
 
     if (files.length > remainingSlots) {
       setError(
@@ -80,11 +113,14 @@ export default function Home() {
     }
 
     const invalidType = selectedFiles.find(
-      (file) => !file.type.startsWith("image/")
+      (file) =>
+        !file.type.startsWith("image/")
     );
 
     if (invalidType) {
-      setError("Please upload image files only.");
+      setError(
+        "Please upload image files only."
+      );
 
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
@@ -94,11 +130,14 @@ export default function Home() {
     }
 
     const oversized = selectedFiles.find(
-      (file) => file.size > 8 * 1024 * 1024
+      (file) =>
+        file.size > 8 * 1024 * 1024
     );
 
     if (oversized) {
-      setError("Each image must be smaller than 8MB.");
+      setError(
+        "Each image must be smaller than 8MB."
+      );
 
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
@@ -121,12 +160,15 @@ export default function Home() {
 
         completed += 1;
 
-        if (completed === selectedFiles.length) {
+        if (
+          completed ===
+          selectedFiles.length
+        ) {
           setUploadedImages((current) => {
-            const combined = [...current, ...newImages].slice(
-              0,
-              3
-            );
+            const combined = [
+              ...current,
+              ...newImages,
+            ].slice(0, 3);
 
             return combined;
           });
@@ -155,11 +197,17 @@ export default function Home() {
 
   function removeUploadedImage(index) {
     setUploadedImages((current) =>
-      current.filter((_, imageIndex) => imageIndex !== index)
+      current.filter(
+        (_, imageIndex) =>
+          imageIndex !== index
+      )
     );
 
     setPhotoPositions((current) =>
-      current.filter((_, positionIndex) => positionIndex !== index)
+      current.filter(
+        (_, positionIndex) =>
+          positionIndex !== index
+      )
     );
 
     if (fileInputRef.current) {
@@ -171,6 +219,7 @@ export default function Home() {
 
   function clearUploadedImages() {
     setUploadedImages([]);
+
     setPhotoPositions([
       "left",
       "center",
@@ -189,7 +238,11 @@ export default function Home() {
       const next = [...current];
 
       while (next.length < 3) {
-        next.push(["left", "center", "right"][next.length]);
+        next.push(
+          ["left", "center", "right"][
+            next.length
+          ]
+        );
       }
 
       next[index] = value;
@@ -213,40 +266,50 @@ export default function Home() {
     setImage("");
 
     try {
-      const response = await fetch("/api/generate-image", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          prompt: text,
-          type: "flyer",
+      const response = await fetch(
+        "/api/generate-image",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify({
+            prompt: text,
+            type: "flyer",
 
-          referenceImages: uploadedImages.map(
-            (item) => item.image
-          ),
+            referenceImages:
+              uploadedImages.map(
+                (item) => item.image
+              ),
 
-          photoSize: uploadedImages.length
-            ? photoSize
-            : null,
+            photoSize:
+              uploadedImages.length
+                ? photoSize
+                : null,
 
-          photoPositions: uploadedImages.length
-            ? photoPositions.slice(
-                0,
-                uploadedImages.length
-              )
-            : null,
+            photoPositions:
+              uploadedImages.length
+                ? photoPositions.slice(
+                    0,
+                    uploadedImages.length
+                  )
+                : null,
 
-          referenceImage:
-            uploadedImages[0]?.image || null,
+            referenceImage:
+              uploadedImages[0]?.image ||
+              null,
 
-          photoPosition: uploadedImages.length
-            ? photoPositions[0]
-            : null,
-        }),
-      });
+            photoPosition:
+              uploadedImages.length
+                ? photoPositions[0]
+                : null,
+          }),
+        }
+      );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (!response.ok) {
         throw new Error(
@@ -272,22 +335,28 @@ export default function Home() {
     }
   }
 
-  async function getBuilderPlan(project, session) {
+  async function getBuilderPlan(
+    project,
+    session
+  ) {
     const planResponse = await fetch(
       "/api/builder/plan",
       {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type":
+            "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
-          originalRequest: project.original_request,
+          originalRequest:
+            project.original_request,
         }),
       }
     );
 
-    const planData = await planResponse.json();
+    const planData =
+      await planResponse.json();
 
     if (!planResponse.ok) {
       throw new Error(
@@ -296,7 +365,8 @@ export default function Home() {
       );
     }
 
-    const plan = planData?.plan || planData;
+    const plan =
+      planData?.plan || planData;
 
     if (!plan?.buildStages?.length) {
       throw new Error(
@@ -308,7 +378,8 @@ export default function Home() {
   }
 
   async function startBuilder() {
-    const text = builderPrompt.trim();
+    const text =
+      builderPrompt.trim();
 
     if (!text) {
       setError(
@@ -326,30 +397,43 @@ export default function Home() {
 
     try {
       const supabaseUrl =
-        process.env.NEXT_PUBLIC_SUPABASE_URL;
+        process.env
+          .NEXT_PUBLIC_SUPABASE_URL;
 
       const supabaseAnonKey =
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+        process.env
+          .NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-      if (!supabaseUrl || !supabaseAnonKey) {
-        throw new Error("Supabase is not configured.");
+      if (
+        !supabaseUrl ||
+        !supabaseAnonKey
+      ) {
+        throw new Error(
+          "Supabase is not configured."
+        );
       }
 
-      const { createClient } = await import(
-        "@supabase/supabase-js"
-      );
+      const { createClient } =
+        await import(
+          "@supabase/supabase-js"
+        );
 
-      const supabase = createClient(
-        supabaseUrl,
-        supabaseAnonKey
-      );
+      const supabase =
+        createClient(
+          supabaseUrl,
+          supabaseAnonKey
+        );
 
       const {
         data: { session },
         error: sessionError,
-      } = await supabase.auth.getSession();
+      } =
+        await supabase.auth.getSession();
 
-      if (sessionError || !session) {
+      if (
+        sessionError ||
+        !session
+      ) {
         throw new Error(
           "Please log in before starting a project."
         );
@@ -360,7 +444,8 @@ export default function Home() {
         {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type":
+              "application/json",
             Authorization: `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({
@@ -369,7 +454,8 @@ export default function Home() {
         }
       );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (!response.ok) {
         throw new Error(
@@ -391,22 +477,28 @@ export default function Home() {
         "📋 Creating your real project plan...",
       ]);
 
-      const plan = await getBuilderPlan(
-        project,
-        session
-      );
+      const plan =
+        await getBuilderPlan(
+          project,
+          session
+        );
 
       setBuilderProject(project);
       setBuilderPlan(plan);
 
-      setBuilderBuildLogs((current) => [
-        ...current,
-        `✅ Plan ready: ${plan.buildStages.length} real build stages.`,
-      ]);
+      setBuilderBuildLogs(
+        (current) => [
+          ...current,
+          `✅ Plan ready: ${plan.buildStages.length} real build stages.`,
+        ]
+      );
 
       setBuilderView("plan");
     } catch (error) {
-      console.error("Builder start error:", error);
+      console.error(
+        "Builder start error:",
+        error
+      );
 
       setError(
         error?.message ||
@@ -438,37 +530,52 @@ export default function Home() {
     setBuilderBuildError("");
     setBuilderView("build");
 
-    setBuilderBuildLogs((current) => [
-      ...current,
-      "🧠 BOMBA AI is understanding your project...",
-    ]);
+    setBuilderBuildLogs(
+      (current) => [
+        ...current,
+        "🧠 BOMBA AI is understanding your project...",
+      ]
+    );
 
     try {
       const supabaseUrl =
-        process.env.NEXT_PUBLIC_SUPABASE_URL;
+        process.env
+          .NEXT_PUBLIC_SUPABASE_URL;
 
       const supabaseAnonKey =
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+        process.env
+          .NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-      if (!supabaseUrl || !supabaseAnonKey) {
-        throw new Error("Supabase is not configured.");
+      if (
+        !supabaseUrl ||
+        !supabaseAnonKey
+      ) {
+        throw new Error(
+          "Supabase is not configured."
+        );
       }
 
-      const { createClient } = await import(
-        "@supabase/supabase-js"
-      );
+      const { createClient } =
+        await import(
+          "@supabase/supabase-js"
+        );
 
-      const supabase = createClient(
-        supabaseUrl,
-        supabaseAnonKey
-      );
+      const supabase =
+        createClient(
+          supabaseUrl,
+          supabaseAnonKey
+        );
 
       const {
         data: { session },
         error: sessionError,
-      } = await supabase.auth.getSession();
+      } =
+        await supabase.auth.getSession();
 
-      if (sessionError || !session) {
+      if (
+        sessionError ||
+        !session
+      ) {
         throw new Error(
           "Please log in before building."
         );
@@ -477,50 +584,64 @@ export default function Home() {
       let plan = builderPlan;
 
       if (!plan) {
-        setBuilderBuildLogs((current) => [
-          ...current,
-          "📋 Creating the real project plan...",
-        ]);
-
-        plan = await getBuilderPlan(
-          builderProject,
-          session
+        setBuilderBuildLogs(
+          (current) => [
+            ...current,
+            "📋 Creating the real project plan...",
+          ]
         );
+
+        plan =
+          await getBuilderPlan(
+            builderProject,
+            session
+          );
 
         setBuilderPlan(plan);
 
-        setBuilderBuildLogs((current) => [
-          ...current,
-          `📋 Plan ready: ${plan.buildStages.length} real build stages.`,
-        ]);
+        setBuilderBuildLogs(
+          (current) => [
+            ...current,
+            `📋 Plan ready: ${plan.buildStages.length} real build stages.`,
+          ]
+        );
       }
 
       const requestedNextStage =
-        Number(builderProject.current_stage || 0) + 1;
+        Number(
+          builderProject.current_stage ||
+            0
+        ) + 1;
 
-      setBuilderBuildLogs((current) => [
-        ...current,
-        `🏗️ Starting real build stage ${requestedNextStage}...`,
-      ]);
-
-      const buildResponse = await fetch(
-        "/api/builder/build",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            projectId: builderProject.id,
-            originalRequest:
-              builderProject.original_request,
-            plan,
-          }),
-        }
+      setBuilderBuildLogs(
+        (current) => [
+          ...current,
+          `🏗️ Starting real build stage ${requestedNextStage}...`,
+        ]
       );
 
-      const buildData = await buildResponse.json();
+      const buildResponse =
+        await fetch(
+          "/api/builder/build",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              projectId:
+                builderProject.id,
+              originalRequest:
+                builderProject.original_request,
+              plan,
+            }),
+          }
+        );
+
+      const buildData =
+        await buildResponse.json();
 
       if (!buildResponse.ok) {
         throw new Error(
@@ -537,9 +658,11 @@ export default function Home() {
 
       const returnedFiles =
         Array.isArray(
-          buildData?.project?.project_files
+          buildData?.project
+            ?.project_files
         )
-          ? buildData.project.project_files
+          ? buildData.project
+              .project_files
           : Array.isArray(
               builderProject?.project_files
             )
@@ -551,49 +674,70 @@ export default function Home() {
         ...buildData.project,
         original_request:
           builderProject.original_request,
-        project_files: returnedFiles,
+        project_files:
+          returnedFiles,
       };
 
-      setBuilderProject(safeProject);
+      setBuilderProject(
+        safeProject
+      );
 
       const stageName =
-        buildData?.stage?.stageName ||
+        buildData?.stage
+          ?.stageName ||
         `Stage ${
-          buildData?.project?.current_stage ||
+          buildData?.project
+            ?.current_stage ||
           requestedNextStage
         }`;
 
       const stageSummary =
-        buildData?.stage?.summary ||
+        buildData?.stage
+          ?.summary ||
         "BOMBA AI completed and saved this build stage.";
 
-      setBuilderBuildLogs((current) => [
-        ...current,
-        `✅ ${stageName} completed.`,
-        `📝 ${stageSummary}`,
-      ]);
+      setBuilderBuildLogs(
+        (current) => [
+          ...current,
+          `✅ ${stageName} completed.`,
+          `📝 ${stageSummary}`,
+        ]
+      );
     } catch (err) {
-      console.error("Builder build error:", err);
+      console.error(
+        "Builder build error:",
+        err
+      );
 
       const message =
         err?.message ||
         "Something went wrong while building your project.";
 
-      setBuilderBuildError(message);
+      setBuilderBuildError(
+        message
+      );
 
-      setBuilderBuildLogs((current) => [
-        ...current,
-        `❌ ${message}`,
-      ]);
+      setBuilderBuildLogs(
+        (current) => [
+          ...current,
+          `❌ ${message}`,
+        ]
+      );
     } finally {
-      setBuilderBuildLoading(false);
+      setBuilderBuildLoading(
+        false
+      );
     }
   }
 
-  async function revealAskAnswerGradually(text) {
+  async function revealAskAnswerGradually(
+    text
+  ) {
     setAskAnswer("");
 
-    const words = text.split(/(\s+)/);
+    const words =
+      text.split(/(\s+)/);
+
     let current = "";
 
     for (const part of words) {
@@ -601,15 +745,17 @@ export default function Home() {
       setAskAnswer(current);
 
       if (part.trim()) {
-        await new Promise((resolve) =>
-          setTimeout(resolve, 28)
+        await new Promise(
+          (resolve) =>
+            setTimeout(resolve, 28)
         );
       }
     }
   }
 
   async function askBombaAI() {
-    const question = askPrompt.trim();
+    const question =
+      askPrompt.trim();
 
     if (!question) {
       setAskError(
@@ -625,32 +771,43 @@ export default function Home() {
 
     try {
       const supabaseUrl =
-        process.env.NEXT_PUBLIC_SUPABASE_URL;
+        process.env
+          .NEXT_PUBLIC_SUPABASE_URL;
 
       const supabaseAnonKey =
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+        process.env
+          .NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-      if (!supabaseUrl || !supabaseAnonKey) {
+      if (
+        !supabaseUrl ||
+        !supabaseAnonKey
+      ) {
         throw new Error(
           "Supabase is not configured."
         );
       }
 
-      const { createClient } = await import(
-        "@supabase/supabase-js"
-      );
+      const { createClient } =
+        await import(
+          "@supabase/supabase-js"
+        );
 
-      const supabase = createClient(
-        supabaseUrl,
-        supabaseAnonKey
-      );
+      const supabase =
+        createClient(
+          supabaseUrl,
+          supabaseAnonKey
+        );
 
       const {
         data: { session },
         error: sessionError,
-      } = await supabase.auth.getSession();
+      } =
+        await supabase.auth.getSession();
 
-      if (sessionError || !session) {
+      if (
+        sessionError ||
+        !session
+      ) {
         throw new Error(
           "Please log in before using Ask BOMBA AI."
         );
@@ -661,7 +818,8 @@ export default function Home() {
         {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type":
+              "application/json",
             Authorization: `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({
@@ -670,7 +828,8 @@ export default function Home() {
         }
       );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (!response.ok) {
         throw new Error(
@@ -685,7 +844,9 @@ export default function Home() {
         );
       }
 
-      await revealAskAnswerGradually(data.answer);
+      await revealAskAnswerGradually(
+        data.answer
+      );
     } catch (err) {
       console.error(
         "Ask BOMBA AI error:",
@@ -709,13 +870,18 @@ export default function Home() {
         askAnswer
       );
 
-      setCopyStatus("ANSWER COPIED ✓");
+      setCopyStatus(
+        "ANSWER COPIED ✓"
+      );
 
       setTimeout(() => {
         setCopyStatus("");
       }, 2000);
     } catch (error) {
-      console.error("Copy answer error:", error);
+      console.error(
+        "Copy answer error:",
+        error
+      );
 
       setCopyStatus(
         "Copy failed. Please select and copy the answer manually."
@@ -731,14 +897,21 @@ export default function Home() {
     if (!askAnswer) return;
 
     const codeBlocks = [];
+
     const regex =
       /```(?:[a-zA-Z0-9_+-]+)?\s*([\s\S]*?)```/g;
 
     let match;
 
-    while ((match = regex.exec(askAnswer)) !== null) {
+    while (
+      (match =
+        regex.exec(askAnswer)) !==
+      null
+    ) {
       if (match[1]?.trim()) {
-        codeBlocks.push(match[1].trim());
+        codeBlocks.push(
+          match[1].trim()
+        );
       }
     }
 
@@ -759,13 +932,18 @@ export default function Home() {
         codeBlocks.join("\n\n")
       );
 
-      setCopyStatus("CODE COPIED ✓");
+      setCopyStatus(
+        "CODE COPIED ✓"
+      );
 
       setTimeout(() => {
         setCopyStatus("");
       }, 2000);
     } catch (error) {
-      console.error("Copy code error:", error);
+      console.error(
+        "Copy code error:",
+        error
+      );
 
       setCopyStatus(
         "Copy failed. Please select and copy the code manually."
@@ -795,11 +973,13 @@ export default function Home() {
       return;
     }
 
-    const recognition = new SpeechRecognition();
+    const recognition =
+      new SpeechRecognition();
 
     recognition.lang = "en-US";
     recognition.continuous = false;
-    recognition.interimResults = false;
+    recognition.interimResults =
+      false;
     recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
@@ -807,16 +987,23 @@ export default function Home() {
       setAskError("");
     };
 
-    recognition.onresult = (event) => {
+    recognition.onresult = (
+      event
+    ) => {
       const transcript =
-        event.results?.[0]?.[0]?.transcript || "";
+        event.results?.[0]?.[0]
+          ?.transcript || "";
 
       if (transcript.trim()) {
-        setAskPrompt(transcript.trim());
+        setAskPrompt(
+          transcript.trim()
+        );
       }
     };
 
-    recognition.onerror = (event) => {
+    recognition.onerror = (
+      event
+    ) => {
       console.error(
         "Voice recognition error:",
         event
@@ -824,7 +1011,10 @@ export default function Home() {
 
       setVoiceListening(false);
 
-      if (event?.error === "not-allowed") {
+      if (
+        event?.error ===
+        "not-allowed"
+      ) {
         setAskError(
           "Microphone permission was denied. Please allow microphone access and try again."
         );
@@ -859,9 +1049,13 @@ export default function Home() {
   function downloadImage() {
     if (!image) return;
 
-    const link = document.createElement("a");
+    const link =
+      document.createElement("a");
+
     link.href = image;
-    link.download = "bomba-ai-flyer.png";
+    link.download =
+      "bomba-ai-flyer.png";
+
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -870,15 +1064,21 @@ export default function Home() {
   function selectFeature(name) {
     setMenuOpen(false);
 
-    if (name === "Universal Builder") {
-      setActiveFeature("Universal Builder");
+    if (
+      name === "Universal Builder"
+    ) {
+      setActiveFeature(
+        "Universal Builder"
+      );
       setError("");
       setAskError("");
       return;
     }
 
     if (name === "ASK BOMBA AI") {
-      setActiveFeature("ASK BOMBA AI");
+      setActiveFeature(
+        "ASK BOMBA AI"
+      );
       setError("");
       setAskError("");
       return;
@@ -936,7 +1136,9 @@ export default function Home() {
 
   function openBuilder() {
     setMenuOpen(false);
-    setActiveFeature("Universal Builder");
+    setActiveFeature(
+      "Universal Builder"
+    );
     setError("");
 
     setTimeout(() => {
@@ -949,7 +1151,9 @@ export default function Home() {
 
   function openAsk() {
     setMenuOpen(false);
-    setActiveFeature("ASK BOMBA AI");
+    setActiveFeature(
+      "ASK BOMBA AI"
+    );
     setAskError("");
 
     setTimeout(() => {
@@ -965,43 +1169,29 @@ export default function Home() {
     window.location.href = "/auth";
   }
 
-  const totalStages =
-    Number(builderProject?.total_stages || 0);
-
-  const currentStage =
-    Number(builderProject?.current_stage || 0);
-
-  const progressPercent = totalStages
-    ? Math.min(
-        100,
-        Math.round(
-          (currentStage / totalStages) * 100
-        )
-      )
-    : 0;
-
-  const buildCompleted =
-    builderProject?.is_completed === true ||
-    (totalStages > 0 &&
-      currentStage >= totalStages);
-
   return (
     <main style={styles.page}>
       <header style={styles.header}>
         <button
           type="button"
-          onClick={goHome}
           style={styles.brandButton}
+          onClick={goHome}
         >
           <div style={styles.brand}>
-            <div style={styles.logo}>TB</div>
+            <div style={styles.logo}>
+              TB
+            </div>
 
             <div>
-              <div style={styles.brandName}>
+              <div
+                style={styles.brandName}
+              >
                 {BRAND.name}
               </div>
 
-              <div style={styles.tagline}>
+              <div
+                style={styles.tagline}
+              >
                 {BRAND.tagline}
               </div>
             </div>
@@ -1017,7 +1207,9 @@ export default function Home() {
               : {}),
           }}
           onClick={() => {
-            setMenuOpen((current) => !current);
+            setMenuOpen(
+              (current) => !current
+            );
             setError("");
           }}
           aria-label="Open BOMBA AI menu"
@@ -1031,32 +1223,48 @@ export default function Home() {
         <>
           <div
             style={styles.menuOverlay}
-            onClick={() => setMenuOpen(false)}
+            onClick={() =>
+              setMenuOpen(false)
+            }
           />
 
           <div style={styles.menuPanel}>
-            <div style={styles.menuHeader}>
+            <div
+              style={styles.menuHeader}
+            >
               <div>
-                <div style={styles.menuBrand}>
+                <div
+                  style={styles.menuBrand}
+                >
                   BOMBA AI
                 </div>
 
-                <div style={styles.menuTagline}>
+                <div
+                  style={styles.menuTagline}
+                >
                   Automate. Grow. Earn.
                 </div>
               </div>
 
-              <div style={styles.menuTB}>TB</div>
+              <div style={styles.menuTB}>
+                TB
+              </div>
             </div>
 
-            <div style={styles.menuDivider}></div>
+            <div
+              style={styles.menuDivider}
+            ></div>
 
             <button
               type="button"
               style={styles.menuItem}
               onClick={goHome}
             >
-              <span style={styles.menuIcon}>🏠</span>
+              <span
+                style={styles.menuIcon}
+              >
+                🏠
+              </span>
               <span>Home</span>
             </button>
 
@@ -1065,8 +1273,14 @@ export default function Home() {
               style={styles.menuItem}
               onClick={openFlyer}
             >
-              <span style={styles.menuIcon}>🎨</span>
-              <span>Flyer Generator</span>
+              <span
+                style={styles.menuIcon}
+              >
+                🎨
+              </span>
+              <span>
+                Flyer Generator
+              </span>
             </button>
 
             <button
@@ -1074,8 +1288,14 @@ export default function Home() {
               style={styles.menuItem}
               onClick={openBuilder}
             >
-              <span style={styles.menuIcon}>🛠️</span>
-              <span>Universal Builder</span>
+              <span
+                style={styles.menuIcon}
+              >
+                🛠️
+              </span>
+              <span>
+                Universal Builder
+              </span>
             </button>
 
             <button
@@ -1083,8 +1303,14 @@ export default function Home() {
               style={styles.menuItem}
               onClick={openAsk}
             >
-              <span style={styles.menuIcon}>💬</span>
-              <span>Ask BOMBA AI</span>
+              <span
+                style={styles.menuIcon}
+              >
+                💬
+              </span>
+              <span>
+                Ask BOMBA AI
+              </span>
             </button>
 
             <button
@@ -1092,19 +1318,38 @@ export default function Home() {
               style={styles.menuItem}
               onClick={openAuth}
             >
-              <span style={styles.menuIcon}>🔐</span>
-              <span>Login / Sign Up</span>
+              <span
+                style={styles.menuIcon}
+              >
+                🔐
+              </span>
+              <span>
+                Login / Sign Up
+              </span>
             </button>
 
-            <div style={styles.menuDivider}></div>
+            <div
+              style={styles.menuDivider}
+            ></div>
 
-            <div style={styles.menuComing}>
-              <div style={styles.menuComingTitle}>
+            <div
+              style={styles.menuComing}
+            >
+              <div
+                style={
+                  styles.menuComingTitle
+                }
+              >
                 More coming soon
               </div>
 
-              <div style={styles.menuComingText}>
-                Website • Logo • Image • AI Tools
+              <div
+                style={
+                  styles.menuComingText
+                }
+              >
+                Website • Logo • Image • AI
+                Tools
               </div>
             </div>
           </div>
@@ -1121,21 +1366,25 @@ export default function Home() {
         </h1>
 
         <p style={styles.heroText}>
-          Create flyers, websites, logos, images, apps and
-          more with one intelligent AI platform.
+          Create flyers, websites, logos,
+          images, apps and more with one
+          intelligent AI platform.
         </p>
 
         <div style={styles.featureRow}>
           {FEATURES.map((feature) => {
             const isActive =
-              activeFeature === feature.name;
+              activeFeature ===
+              feature.name;
 
             return (
               <button
                 key={feature.name}
                 type="button"
                 onClick={() =>
-                  selectFeature(feature.name)
+                  selectFeature(
+                    feature.name
+                  )
                 }
                 style={{
                   ...styles.feature,
@@ -1144,11 +1393,19 @@ export default function Home() {
                     : {}),
                 }}
               >
-                <div style={styles.featureIcon}>
+                <div
+                  style={
+                    styles.featureIcon
+                  }
+                >
                   {feature.icon}
                 </div>
 
-                <div style={styles.featureName}>
+                <div
+                  style={
+                    styles.featureName
+                  }
+                >
                   {feature.name}
                 </div>
               </button>
@@ -1157,36 +1414,50 @@ export default function Home() {
         </div>
       </section>
 
-      {activeFeature === "ASK BOMBA AI" ? (
+      {activeFeature ===
+      "ASK BOMBA AI" ? (
         <section style={styles.workspace}>
           <div style={styles.sectionTop}>
             <div>
-              <div style={styles.smallGold}>
+              <div
+                style={styles.smallGold}
+              >
                 INTELLIGENT ASSISTANT
               </div>
 
-              <h2 style={styles.sectionTitle}>
+              <h2
+                style={styles.sectionTitle}
+              >
                 Ask BOMBA AI anything
               </h2>
             </div>
 
-            <div style={styles.liveBadge}>
-              <span style={styles.liveDot}></span>
+            <div
+              style={styles.liveBadge}
+            >
+              <span
+                style={styles.liveDot}
+              ></span>
               AI READY
             </div>
           </div>
 
           <div style={styles.askCard}>
-            <div style={styles.askLogo}>TB</div>
+            <div style={styles.askLogo}>
+              TB
+            </div>
 
             <h2 style={styles.askTitle}>
               Ask BOMBA AI anything
             </h2>
 
-            <p style={styles.askDescription}>
-              Your independent AI assistant for questions,
-              ideas, business, writing, coding, planning
-              and more.
+            <p
+              style={styles.askDescription}
+            >
+              Your independent AI assistant
+              for questions, ideas, business,
+              writing, coding, planning and
+              more.
             </p>
 
             <label style={styles.label}>
@@ -1196,24 +1467,30 @@ export default function Home() {
             <textarea
               value={askPrompt}
               onChange={(e) => {
-                setAskPrompt(e.target.value);
+                setAskPrompt(
+                  e.target.value
+                );
                 setAskError("");
               }}
               placeholder="Ask anything... Example: Give me 5 business ideas I can start in Nigeria with ₦100,000."
               style={styles.askTextarea}
             />
 
-            <div style={styles.askActions}>
+            <div
+              style={styles.askActions}
+            >
               <button
                 type="button"
                 onClick={startVoiceInput}
                 disabled={
-                  voiceListening || askLoading
+                  voiceListening ||
+                  askLoading
                 }
                 style={{
                   ...styles.voiceButton,
                   opacity:
-                    voiceListening || askLoading
+                    voiceListening ||
+                    askLoading
                       ? 0.65
                       : 1,
                 }}
@@ -1229,7 +1506,10 @@ export default function Home() {
                 disabled={askLoading}
                 style={{
                   ...styles.askButton,
-                  opacity: askLoading ? 0.65 : 1,
+                  opacity:
+                    askLoading
+                      ? 0.65
+                      : 1,
                 }}
               >
                 {askLoading
@@ -1239,8 +1519,11 @@ export default function Home() {
             </div>
 
             {voiceListening && (
-              <div style={styles.voiceStatus}>
-                🎙️ BOMBA AI is listening. Speak clearly...
+              <div
+                style={styles.voiceStatus}
+              >
+                🎙️ BOMBA AI is listening.
+                Speak clearly...
               </div>
             )}
 
@@ -1251,8 +1534,16 @@ export default function Home() {
             )}
 
             {askLoading && (
-              <div style={styles.askLoadingCard}>
-                <div style={styles.askLoadingLogo}>
+              <div
+                style={
+                  styles.askLoadingCard
+                }
+              >
+                <div
+                  style={
+                    styles.askLoadingLogo
+                  }
+                >
                   TB
                 </div>
 
@@ -1261,112 +1552,184 @@ export default function Home() {
                     BOMBA AI is thinking...
                   </strong>
 
-                  <div style={styles.askLoadingText}>
-                    BOMBA AI is preparing your answer.
+                  <div
+                    style={
+                      styles.askLoadingText
+                    }
+                  >
+                    BOMBA AI is preparing
+                    your answer.
                   </div>
                 </div>
               </div>
             )}
 
-            {askAnswer && !askLoading && (
-              <div style={styles.answerCard}>
-                <div style={styles.answerHeader}>
-                  <div style={styles.answerLogo}>
-                    TB
-                  </div>
-
-                  <div>
-                    <div style={styles.answerLabel}>
-                      BOMBA AI
-                    </div>
-
-                    <div style={styles.answerSubLabel}>
-                      Independent AI Assistant
-                    </div>
-                  </div>
-                </div>
-
-                <div style={styles.answerText}>
-                  {askAnswer}
-                </div>
-
-                <div style={styles.copyActions}>
-                  <button
-                    type="button"
-                    onClick={copyAskAnswer}
-                    style={styles.copyButton}
+            {askAnswer &&
+              !askLoading && (
+                <div
+                  style={
+                    styles.answerCard
+                  }
+                >
+                  <div
+                    style={
+                      styles.answerHeader
+                    }
                   >
-                    📋 COPY ANSWER
-                  </button>
+                    <div
+                      style={
+                        styles.answerLogo
+                      }
+                    >
+                      TB
+                    </div>
 
-                  {askAnswer.includes("```") && (
+                    <div>
+                      <div
+                        style={
+                          styles.answerLabel
+                        }
+                      >
+                        BOMBA AI
+                      </div>
+
+                      <div
+                        style={
+                          styles.answerSubLabel
+                        }
+                      >
+                        Independent AI
+                        Assistant
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    style={
+                      styles.answerText
+                    }
+                  >
+                    {askAnswer}
+                  </div>
+
+                  <div
+                    style={
+                      styles.copyActions
+                    }
+                  >
                     <button
                       type="button"
-                      onClick={copyCodeFromAnswer}
-                      style={styles.copyButton}
+                      onClick={
+                        copyAskAnswer
+                      }
+                      style={
+                        styles.copyButton
+                      }
                     >
-                      💻 COPY CODE
+                      📋 COPY ANSWER
                     </button>
-                  )}
-                </div>
 
-                {copyStatus && (
-                  <div style={styles.copyStatus}>
-                    {copyStatus}
+                    {askAnswer.includes(
+                      "```"
+                    ) && (
+                      <button
+                        type="button"
+                        onClick={
+                          copyCodeFromAnswer
+                        }
+                        style={
+                          styles.copyButton
+                        }
+                      >
+                        💻 COPY CODE
+                      </button>
+                    )}
                   </div>
-                )}
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAskPrompt("");
-                    setAskAnswer("");
-                    setAskError("");
-                    setCopyStatus("");
-                  }}
-                  style={styles.askNewButton}
-                >
-                  + ASK ANOTHER QUESTION
-                </button>
-              </div>
-            )}
+                  {copyStatus && (
+                    <div
+                      style={
+                        styles.copyStatus
+                      }
+                    >
+                      {copyStatus}
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAskPrompt("");
+                      setAskAnswer("");
+                      setAskError("");
+                      setCopyStatus("");
+                    }}
+                    style={
+                      styles.askNewButton
+                    }
+                  >
+                    + ASK ANOTHER QUESTION
+                  </button>
+                </div>
+              )}
           </div>
         </section>
-      ) : activeFeature === "Universal Builder" ? (
+      ) : activeFeature ===
+        "Universal Builder" ? (
         <section style={styles.workspace}>
           <div style={styles.sectionTop}>
             <div>
-              <div style={styles.smallGold}>
+              <div
+                style={styles.smallGold}
+              >
                 BUILD
               </div>
 
-              <h2 style={styles.sectionTitle}>
+              <h2
+                style={styles.sectionTitle}
+              >
                 Universal Builder
               </h2>
             </div>
 
-            <div style={styles.liveBadge}>
-              <span style={styles.liveDot}></span>
+            <div
+              style={styles.liveBadge}
+            >
+              <span
+                style={styles.liveDot}
+              ></span>
               BUILDER READY
             </div>
           </div>
 
-          {builderView === "start" && (
-            <div style={styles.builderCard}>
-              <div style={styles.builderLogo}>
+          {builderView ===
+            "start" && (
+            <div
+              style={styles.builderCard}
+            >
+              <div
+                style={styles.builderLogo}
+              >
                 TB
               </div>
 
-              <h2 style={styles.builderTitle}>
+              <h2
+                style={styles.builderTitle}
+              >
                 Build anything with BOMBA AI
               </h2>
 
-              <p style={styles.builderDescription}>
-                Describe what you want to build. BOMBA AI
-                will understand the request, create the
-                project plan, build it in real stages, save
-                your progress, and continue from where it
-                stopped.
+              <p
+                style={
+                  styles.builderDescription
+                }
+              >
+                Describe what you want to
+                build. BOMBA AI will understand
+                the request, create the project
+                plan, build it in real stages,
+                save your progress, and continue
+                from where it stopped.
               </p>
 
               <label style={styles.label}>
@@ -1376,7 +1739,9 @@ export default function Home() {
               <textarea
                 value={builderPrompt}
                 onChange={(e) => {
-                  setBuilderPrompt(e.target.value);
+                  setBuilderPrompt(
+                    e.target.value
+                  );
                   setError("");
                 }}
                 placeholder="Example: Build a school management system for students, teachers, classes and school administrators..."
@@ -1389,7 +1754,9 @@ export default function Home() {
                 onClick={startBuilder}
                 style={{
                   ...styles.generateButton,
-                  opacity: loading ? 0.65 : 1,
+                  opacity: loading
+                    ? 0.65
+                    : 1,
                 }}
               >
                 {loading
@@ -1398,84 +1765,188 @@ export default function Home() {
               </button>
 
               {error && (
-                <div style={styles.error}>
+                <div
+                  style={styles.error}
+                >
                   {error}
                 </div>
               )}
 
-              <div style={styles.builderSteps}>
-                <div style={styles.builderStep}>
-                  <div style={styles.stepNumber}>1</div>
+              <div
+                style={
+                  styles.builderSteps
+                }
+              >
+                <div
+                  style={
+                    styles.builderStep
+                  }
+                >
+                  <div
+                    style={
+                      styles.stepNumber
+                    }
+                  >
+                    1
+                  </div>
 
                   <div>
-                    <strong>Describe</strong>
+                    <strong>
+                      Describe
+                    </strong>
 
-                    <div style={styles.stepText}>
+                    <div
+                      style={
+                        styles.stepText
+                      }
+                    >
                       Tell BOMBA what you want.
                     </div>
                   </div>
                 </div>
 
-                <div style={styles.builderStep}>
-                  <div style={styles.stepNumber}>2</div>
+                <div
+                  style={
+                    styles.builderStep
+                  }
+                >
+                  <div
+                    style={
+                      styles.stepNumber
+                    }
+                  >
+                    2
+                  </div>
 
                   <div>
-                    <strong>Understand & Plan</strong>
+                    <strong>
+                      Understand & Plan
+                    </strong>
 
-                    <div style={styles.stepText}>
-                      BOMBA AI understands your request
-                      and creates the real project plan.
+                    <div
+                      style={
+                        styles.stepText
+                      }
+                    >
+                      BOMBA AI understands your
+                      request and creates the real
+                      project plan.
                     </div>
                   </div>
                 </div>
 
-                <div style={styles.builderStep}>
-                  <div style={styles.stepNumber}>3</div>
+                <div
+                  style={
+                    styles.builderStep
+                  }
+                >
+                  <div
+                    style={
+                      styles.stepNumber
+                    }
+                  >
+                    3
+                  </div>
 
                   <div>
-                    <strong>Build</strong>
+                    <strong>
+                      Build
+                    </strong>
 
-                    <div style={styles.stepText}>
-                      The AI actually builds the next
-                      project stage.
+                    <div
+                      style={
+                        styles.stepText
+                      }
+                    >
+                      The AI actually builds the
+                      next project stage.
                     </div>
                   </div>
                 </div>
 
-                <div style={styles.builderStep}>
-                  <div style={styles.stepNumber}>4</div>
+                <div
+                  style={
+                    styles.builderStep
+                  }
+                >
+                  <div
+                    style={
+                      styles.stepNumber
+                    }
+                  >
+                    4
+                  </div>
 
                   <div>
-                    <strong>Save</strong>
+                    <strong>
+                      Save
+                    </strong>
 
-                    <div style={styles.stepText}>
-                      Completed work is saved to the
-                      project.
+                    <div
+                      style={
+                        styles.stepText
+                      }
+                    >
+                      Completed work is saved to
+                      the project.
                     </div>
                   </div>
                 </div>
 
-                <div style={styles.builderStep}>
-                  <div style={styles.stepNumber}>5</div>
+                <div
+                  style={
+                    styles.builderStep
+                  }
+                >
+                  <div
+                    style={
+                      styles.stepNumber
+                    }
+                  >
+                    5
+                  </div>
 
                   <div>
-                    <strong>Continue</strong>
+                    <strong>
+                      Continue
+                    </strong>
 
-                    <div style={styles.stepText}>
-                      Future build sessions continue from
-                      the saved stage.
+                    <div
+                      style={
+                        styles.stepText
+                      }
+                    >
+                      Future build sessions continue
+                      from the saved stage.
                     </div>
                   </div>
                 </div>
 
-                <div style={styles.builderStep}>
-                  <div style={styles.stepNumber}>6</div>
+                <div
+                  style={
+                    styles.builderStep
+                  }
+                >
+                  <div
+                    style={
+                      styles.stepNumber
+                    }
+                  >
+                    6
+                  </div>
 
                   <div>
-                    <strong>Control</strong>
+                    <strong>
+                      Control
+                    </strong>
 
-                    <div style={styles.stepText}>
-                      Owner and admin controls come later.
+                    <div
+                      style={
+                        styles.stepText
+                      }
+                    >
+                      Owner and admin controls come
+                      later.
                     </div>
                   </div>
                 </div>
@@ -1483,57 +1954,114 @@ export default function Home() {
             </div>
           )}
 
-          {builderView === "workspace" &&
+          {builderView ===
+            "workspace" &&
             builderProject && (
-              <div style={styles.builderWorkspace}>
-                <div style={styles.workspaceHeader}>
+              <div
+                style={
+                  styles.builderWorkspace
+                }
+              >
+                <div
+                  style={
+                    styles.workspaceHeader
+                  }
+                >
                   <div>
-                    <div style={styles.smallGold}>
+                    <div
+                      style={
+                        styles.smallGold
+                      }
+                    >
                       PROJECT WORKSPACE
                     </div>
 
-                    <h2 style={styles.workspaceTitle}>
+                    <h2
+                      style={
+                        styles.workspaceTitle
+                      }
+                    >
                       {builderProject.project_name ||
                         "New BOMBA Project"}
                     </h2>
                   </div>
 
-                  <div style={styles.projectStatus}>
+                  <div
+                    style={
+                      styles.projectStatus
+                    }
+                  >
                     {buildCompleted
                       ? "COMPLETE"
                       : "ACTIVE"}
                   </div>
                 </div>
 
-                <div style={styles.requestBox}>
-                  <div style={styles.boxLabel}>
+                <div
+                  style={
+                    styles.requestBox
+                  }
+                >
+                  <div
+                    style={styles.boxLabel}
+                  >
                     ORIGINAL REQUEST
                   </div>
 
-                  <div style={styles.requestText}>
-                    {builderProject.original_request}
+                  <div
+                    style={
+                      styles.requestText
+                    }
+                  >
+                    {
+                      builderProject.original_request
+                    }
                   </div>
                 </div>
 
-                <div style={styles.progressCard}>
-                  <div style={styles.progressTop}>
+                <div
+                  style={
+                    styles.progressCard
+                  }
+                >
+                  <div
+                    style={
+                      styles.progressTop
+                    }
+                  >
                     <div>
-                      <div style={styles.boxLabel}>
+                      <div
+                        style={
+                          styles.boxLabel
+                        }
+                      >
                         BUILD PROGRESS
                       </div>
 
-                      <div style={styles.progressTitle}>
+                      <div
+                        style={
+                          styles.progressTitle
+                        }
+                      >
                         Stage {currentStage} of{" "}
                         {totalStages || "—"}
                       </div>
                     </div>
 
-                    <div style={styles.progressPercent}>
+                    <div
+                      style={
+                        styles.progressPercent
+                      }
+                    >
                       {progressPercent}%
                     </div>
                   </div>
 
-                  <div style={styles.progressTrack}>
+                  <div
+                    style={
+                      styles.progressTrack
+                    }
+                  >
                     <div
                       style={{
                         ...styles.progressBar,
@@ -1542,7 +2070,11 @@ export default function Home() {
                     ></div>
                   </div>
 
-                  <div style={styles.progressNote}>
+                  <div
+                    style={
+                      styles.progressNote
+                    }
+                  >
                     {buildCompleted
                       ? "The planned build stages have been completed."
                       : currentStage
@@ -1551,20 +2083,30 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div style={styles.workspaceActions}>
+                <div
+                  style={
+                    styles.workspaceActions
+                  }
+                >
                   <button
                     type="button"
                     onClick={() =>
-                      setBuilderView("plan")
+                      setBuilderView(
+                        "plan"
+                      )
                     }
-                    style={styles.workspaceButton}
+                    style={
+                      styles.workspaceButton
+                    }
                   >
                     📋 PLAN
                   </button>
 
                   <button
                     type="button"
-                    onClick={buildBuilderProject}
+                    onClick={
+                      buildBuilderProject
+                    }
                     disabled={
                       builderBuildLoading ||
                       buildCompleted
@@ -1589,9 +2131,13 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() =>
-                      setBuilderView("preview")
+                      setBuilderView(
+                        "preview"
+                      )
                     }
-                    style={styles.workspaceButton}
+                    style={
+                      styles.workspaceButton
+                    }
                   >
                     👁️ PREVIEW
                   </button>
@@ -1599,9 +2145,13 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() =>
-                      setBuilderView("files")
+                      setBuilderView(
+                        "files"
+                      )
                     }
-                    style={styles.workspaceButton}
+                    style={
+                      styles.workspaceButton
+                    }
                   >
                     🔒 FILES & CODE
                   </button>
@@ -1610,22 +2160,38 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={openAsk}
-                  style={styles.askFromProjectButton}
+                  style={
+                    styles.askFromProjectButton
+                  }
                 >
                   💬 OPEN ASK BOMBA AI
                 </button>
 
-                <div style={styles.workspaceInfo}>
-                  <div style={styles.infoIcon}>✓</div>
+                <div
+                  style={
+                    styles.workspaceInfo
+                  }
+                >
+                  <div
+                    style={
+                      styles.infoIcon
+                    }
+                  >
+                    ✓
+                  </div>
 
                   <div>
                     <strong>
                       Project saved successfully
                     </strong>
 
-                    <div style={styles.infoText}>
-                      BOMBA AI can continue working from
-                      this saved project.
+                    <div
+                      style={
+                        styles.infoText
+                      }
+                    >
+                      BOMBA AI can continue working
+                      from this saved project.
                     </div>
                   </div>
                 </div>
@@ -1633,23 +2199,42 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={resetBuilder}
-                  style={styles.newProjectButton}
+                  style={
+                    styles.newProjectButton
+                  }
                 >
                   + NEW PROJECT
                 </button>
               </div>
             )}
 
-          {builderView === "plan" &&
+          {builderView ===
+            "plan" &&
             builderProject && (
-              <div style={styles.builderWorkspace}>
-                <div style={styles.workspaceHeader}>
+              <div
+                style={
+                  styles.builderWorkspace
+                }
+              >
+                <div
+                  style={
+                    styles.workspaceHeader
+                  }
+                >
                   <div>
-                    <div style={styles.smallGold}>
+                    <div
+                      style={
+                        styles.smallGold
+                      }
+                    >
                       PROJECT PLAN
                     </div>
 
-                    <h2 style={styles.workspaceTitle}>
+                    <h2
+                      style={
+                        styles.workspaceTitle
+                      }
+                    >
                       BOMBA AI Plan
                     </h2>
                   </div>
@@ -1657,22 +2242,40 @@ export default function Home() {
 
                 {builderPlan ? (
                   <>
-                    <div style={styles.planIntro}>
-                      <h3 style={styles.planProjectName}>
+                    <div
+                      style={
+                        styles.planIntro
+                      }
+                    >
+                      <h3
+                        style={
+                          styles.planProjectName
+                        }
+                      >
                         {builderPlan.projectName ||
                           builderProject.project_name ||
                           "BOMBA Project"}
                       </h3>
 
                       {builderPlan.summary && (
-                        <p style={styles.planSummary}>
+                        <p
+                          style={
+                            styles.planSummary
+                          }
+                        >
                           {builderPlan.summary}
                         </p>
                       )}
 
                       {builderPlan.goal && (
-                        <p style={styles.planSummary}>
-                          <strong>Goal:</strong>{" "}
+                        <p
+                          style={
+                            styles.planSummary
+                          }
+                        >
+                          <strong>
+                            Goal:
+                          </strong>{" "}
                           {builderPlan.goal}
                         </p>
                       )}
@@ -1681,17 +2284,31 @@ export default function Home() {
                     {Array.isArray(
                       builderPlan.features
                     ) &&
-                      builderPlan.features.length > 0 && (
-                        <div style={styles.planSection}>
-                          <div style={styles.boxLabel}>
+                      builderPlan.features
+                        .length > 0 && (
+                        <div
+                          style={
+                            styles.planSection
+                          }
+                        >
+                          <div
+                            style={
+                              styles.boxLabel
+                            }
+                          >
                             FEATURES
                           </div>
 
                           {builderPlan.features.map(
-                            (feature, index) => (
+                            (
+                              feature,
+                              index
+                            ) => (
                               <div
                                 key={`feature-${index}`}
-                                style={styles.planItem}
+                                style={
+                                  styles.planItem
+                                }
                               >
                                 <div
                                   style={
@@ -1703,7 +2320,9 @@ export default function Home() {
 
                                 <div>
                                   <strong>
-                                    {feature.name}
+                                    {
+                                      feature.name
+                                    }
                                   </strong>
 
                                   <div
@@ -1722,18 +2341,34 @@ export default function Home() {
                         </div>
                       )}
 
-                    {Array.isArray(builderPlan.pages) &&
-                      builderPlan.pages.length > 0 && (
-                        <div style={styles.planSection}>
-                          <div style={styles.boxLabel}>
+                    {Array.isArray(
+                      builderPlan.pages
+                    ) &&
+                      builderPlan.pages
+                        .length > 0 && (
+                        <div
+                          style={
+                            styles.planSection
+                          }
+                        >
+                          <div
+                            style={
+                              styles.boxLabel
+                            }
+                          >
                             PAGES
                           </div>
 
                           {builderPlan.pages.map(
-                            (page, index) => (
+                            (
+                              page,
+                              index
+                            ) => (
                               <div
                                 key={`page-${index}`}
-                                style={styles.planItem}
+                                style={
+                                  styles.planItem
+                                }
                               >
                                 <div
                                   style={
@@ -1753,7 +2388,9 @@ export default function Home() {
                                       styles.stepText
                                     }
                                   >
-                                    {page.purpose}
+                                    {
+                                      page.purpose
+                                    }
                                   </div>
                                 </div>
                               </div>
@@ -1765,17 +2402,31 @@ export default function Home() {
                     {Array.isArray(
                       builderPlan.userRoles
                     ) &&
-                      builderPlan.userRoles.length > 0 && (
-                        <div style={styles.planSection}>
-                          <div style={styles.boxLabel}>
+                      builderPlan.userRoles
+                        .length > 0 && (
+                        <div
+                          style={
+                            styles.planSection
+                          }
+                        >
+                          <div
+                            style={
+                              styles.boxLabel
+                            }
+                          >
                             USER ROLES
                           </div>
 
                           {builderPlan.userRoles.map(
-                            (role, index) => (
+                            (
+                              role,
+                              index
+                            ) => (
                               <div
                                 key={`role-${index}`}
-                                style={styles.planItem}
+                                style={
+                                  styles.planItem
+                                }
                               >
                                 <div
                                   style={
@@ -1795,7 +2446,9 @@ export default function Home() {
                                       styles.stepText
                                     }
                                   >
-                                    {role.description}
+                                    {
+                                      role.description
+                                    }
                                   </div>
                                 </div>
                               </div>
@@ -1807,17 +2460,31 @@ export default function Home() {
                     {Array.isArray(
                       builderPlan.buildStages
                     ) &&
-                      builderPlan.buildStages.length > 0 && (
-                        <div style={styles.planSection}>
-                          <div style={styles.boxLabel}>
+                      builderPlan.buildStages
+                        .length > 0 && (
+                        <div
+                          style={
+                            styles.planSection
+                          }
+                        >
+                          <div
+                            style={
+                              styles.boxLabel
+                            }
+                          >
                             REAL BUILD STAGES
                           </div>
 
                           {builderPlan.buildStages.map(
-                            (stage, index) => (
+                            (
+                              stage,
+                              index
+                            ) => (
                               <div
                                 key={`stage-${index}`}
-                                style={styles.planItem}
+                                style={
+                                  styles.planItem
+                                }
                               >
                                 <div
                                   style={
@@ -1852,9 +2519,13 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() =>
-                        setBuilderView("workspace")
+                        setBuilderView(
+                          "workspace"
+                        )
                       }
-                      style={styles.workspaceButtonPrimary}
+                      style={
+                        styles.workspaceButtonPrimary
+                      }
                     >
                       ← BACK TO WORKSPACE
                     </button>
@@ -1862,9 +2533,15 @@ export default function Home() {
                     {!buildCompleted && (
                       <button
                         type="button"
-                        onClick={buildBuilderProject}
-                        disabled={builderBuildLoading}
-                        style={styles.workspaceButtonPrimary}
+                        onClick={
+                          buildBuilderProject
+                        }
+                        disabled={
+                          builderBuildLoading
+                        }
+                        style={
+                          styles.workspaceButtonPrimary
+                        }
                       >
                         {builderBuildLoading
                           ? "🏗️ BUILDING..."
@@ -1873,18 +2550,28 @@ export default function Home() {
                     )}
                   </>
                 ) : (
-                  <div style={styles.fileEmpty}>
-                    <div style={styles.fileIcon}>
+                  <div
+                    style={
+                      styles.fileEmpty
+                    }
+                  >
+                    <div
+                      style={
+                        styles.fileIcon
+                      }
+                    >
                       🧠
                     </div>
 
                     <h3>
-                      BOMBA AI is preparing your plan
+                      BOMBA AI is preparing your
+                      plan
                     </h3>
 
                     <p>
-                      Your real project plan will appear
-                      here before the build begins.
+                      Your real project plan will
+                      appear here before the build
+                      begins.
                     </p>
                   </div>
                 )}
@@ -1892,25 +2579,46 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() =>
-                    setBuilderView("workspace")
+                    setBuilderView(
+                      "workspace"
+                    )
                   }
-                  style={styles.workspaceButton}
+                  style={
+                    styles.workspaceButton
+                  }
                 >
                   ← BACK TO WORKSPACE
                 </button>
               </div>
             )}
 
-          {builderView === "build" &&
+          {builderView ===
+            "build" &&
             builderProject && (
-              <div style={styles.builderWorkspace}>
-                <div style={styles.workspaceHeader}>
+              <div
+                style={
+                  styles.builderWorkspace
+                }
+              >
+                <div
+                  style={
+                    styles.workspaceHeader
+                  }
+                >
                   <div>
-                    <div style={styles.smallGold}>
+                    <div
+                      style={
+                        styles.smallGold
+                      }
+                    >
                       BUILD SESSION
                     </div>
 
-                    <h2 style={styles.workspaceTitle}>
+                    <h2
+                      style={
+                        styles.workspaceTitle
+                      }
+                    >
                       {builderBuildLoading
                         ? "BOMBA AI is building"
                         : buildCompleted
@@ -1919,7 +2627,11 @@ export default function Home() {
                     </h2>
                   </div>
 
-                  <div style={styles.projectStatus}>
+                  <div
+                    style={
+                      styles.projectStatus
+                    }
+                  >
                     {builderBuildLoading
                       ? "WORKING"
                       : buildCompleted
@@ -1928,8 +2640,16 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div style={styles.sessionCard}>
-                  <div style={styles.sessionIcon}>
+                <div
+                  style={
+                    styles.sessionCard
+                  }
+                >
+                  <div
+                    style={
+                      styles.sessionIcon
+                    }
+                  >
                     {builderBuildLoading
                       ? "🏗️"
                       : buildCompleted
@@ -1937,7 +2657,11 @@ export default function Home() {
                       : "🚀"}
                   </div>
 
-                  <h3 style={styles.sessionTitle}>
+                  <h3
+                    style={
+                      styles.sessionTitle
+                    }
+                  >
                     {builderBuildLoading
                       ? "BOMBA AI is doing real build work"
                       : buildCompleted
@@ -1945,36 +2669,67 @@ export default function Home() {
                       : "Ready for the next real build stage"}
                   </h3>
 
-                  <p style={styles.sessionText}>
+                  <p
+                    style={
+                      styles.sessionText
+                    }
+                  >
                     {builderBuildLoading
                       ? "The AI is working on the current project stage. The result will be saved when the stage is completed."
                       : "No artificial waiting is being used. Each BUILD action sends the project to the real build engine."}
                   </p>
 
-                  <div style={styles.sessionRule}>
-                    <strong>Current stage:</strong>{" "}
+                  <div
+                    style={
+                      styles.sessionRule
+                    }
+                  >
+                    <strong>
+                      Current stage:
+                    </strong>{" "}
                     {currentStage} /{" "}
                     {totalStages || "—"}
                   </div>
 
-                  <div style={styles.sessionRule}>
-                    <strong>Continue:</strong>{" "}
+                  <div
+                    style={
+                      styles.sessionRule
+                    }
+                  >
+                    <strong>
+                      Continue:
+                    </strong>{" "}
                     from the exact saved stage
                   </div>
                 </div>
 
-                {builderBuildLogs.length > 0 && (
-                  <div style={styles.buildLogCard}>
-                    <div style={styles.boxLabel}>
+                {builderBuildLogs.length >
+                  0 && (
+                  <div
+                    style={
+                      styles.buildLogCard
+                    }
+                  >
+                    <div
+                      style={
+                        styles.boxLabel
+                      }
+                    >
                       REAL BUILD ACTIVITY
                     </div>
 
-                    <div style={styles.buildLogs}>
+                    <div
+                      style={
+                        styles.buildLogs
+                      }
+                    >
                       {builderBuildLogs.map(
                         (log, index) => (
                           <div
                             key={`log-${index}`}
-                            style={styles.buildLog}
+                            style={
+                              styles.buildLog
+                            }
                           >
                             {log}
                           </div>
@@ -1985,7 +2740,9 @@ export default function Home() {
                 )}
 
                 {builderBuildError && (
-                  <div style={styles.error}>
+                  <div
+                    style={styles.error}
+                  >
                     {builderBuildError}
                   </div>
                 )}
@@ -1994,8 +2751,12 @@ export default function Home() {
                   !buildCompleted && (
                     <button
                       type="button"
-                      onClick={buildBuilderProject}
-                      style={styles.workspaceButtonPrimary}
+                      onClick={
+                        buildBuilderProject
+                      }
+                      style={
+                        styles.workspaceButtonPrimary
+                      }
                     >
                       🚀 BUILD NEXT STAGE
                     </button>
@@ -2004,31 +2765,56 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() =>
-                    setBuilderView("workspace")
+                    setBuilderView(
+                      "workspace"
+                    )
                   }
-                  style={styles.workspaceButtonPrimary}
+                  style={
+                    styles.workspaceButtonPrimary
+                  }
                 >
                   ← BACK TO WORKSPACE
                 </button>
               </div>
             )}
 
-          {builderView === "preview" &&
+          {builderView ===
+            "preview" &&
             builderProject && (
-              <div style={styles.builderWorkspace}>
-                <div style={styles.workspaceHeader}>
+              <div
+                style={
+                  styles.builderWorkspace
+                }
+              >
+                <div
+                  style={
+                    styles.workspaceHeader
+                  }
+                >
                   <div>
-                    <div style={styles.smallGold}>
+                    <div
+                      style={
+                        styles.smallGold
+                      }
+                    >
                       PREVIEW
                     </div>
 
-                    <h2 style={styles.workspaceTitle}>
+                    <h2
+                      style={
+                        styles.workspaceTitle
+                      }
+                    >
                       {builderProject.project_name ||
                         "Project Preview"}
                     </h2>
                   </div>
 
-                  <div style={styles.projectStatus}>
+                  <div
+                    style={
+                      styles.projectStatus
+                    }
+                  >
                     {buildCompleted
                       ? "READY"
                       : "BUILDING"}
@@ -2038,21 +2824,30 @@ export default function Home() {
                 {Array.isArray(
                   builderProject.project_files
                 ) &&
-                builderProject.project_files.length > 0 ? (
+                builderProject
+                  .project_files.length >
+                  0 ? (
                   (() => {
                     const htmlFile =
                       builderProject.project_files.find(
                         (file) =>
                           file?.path
                             ?.toLowerCase()
-                            .replace(/\\/g, "/") ===
+                            .replace(
+                              /\\/g,
+                              "/"
+                            ) ===
                           "index.html"
                       );
 
-                    if (!htmlFile?.content) {
+                    if (
+                      !htmlFile?.content
+                    ) {
                       return (
                         <div
-                          style={styles.previewBuilder}
+                          style={
+                            styles.previewBuilder
+                          }
                         >
                           <div
                             style={
@@ -2079,23 +2874,32 @@ export default function Home() {
                     return (
                       <div
                         style={{
-                          background: "#ffffff",
-                          border: "1px solid #242424",
-                          borderRadius: "14px",
-                          overflow: "hidden",
+                          background:
+                            "#ffffff",
+                          border:
+                            "1px solid #242424",
+                          borderRadius:
+                            "14px",
+                          overflow:
+                            "hidden",
                           width: "100%",
                         }}
                       >
                         <iframe
                           title="BOMBA AI Project Preview"
-                          srcDoc={htmlFile.content}
+                          srcDoc={
+                            htmlFile.content
+                          }
                           style={{
                             width: "100%",
-                            minHeight: "650px",
+                            minHeight:
+                              "650px",
                             height: "75vh",
                             border: "none",
-                            display: "block",
-                            background: "#ffffff",
+                            display:
+                              "block",
+                            background:
+                              "#ffffff",
                           }}
                           sandbox="allow-scripts allow-forms"
                         />
@@ -2104,7 +2908,9 @@ export default function Home() {
                   })()
                 ) : (
                   <div
-                    style={styles.previewBuilder}
+                    style={
+                      styles.previewBuilder
+                    }
                   >
                     <div
                       style={
@@ -2131,7 +2937,9 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() =>
-                    setBuilderView("workspace")
+                    setBuilderView(
+                      "workspace"
+                    )
                   }
                   style={
                     styles.workspaceButtonPrimary
@@ -2142,45 +2950,86 @@ export default function Home() {
               </div>
             )}
 
-          {builderView === "files" &&
+          {builderView ===
+            "files" &&
             builderProject && (
-              <div style={styles.builderWorkspace}>
-                <div style={styles.workspaceHeader}>
+              <div
+                style={
+                  styles.builderWorkspace
+                }
+              >
+                <div
+                  style={
+                    styles.workspaceHeader
+                  }
+                >
                   <div>
-                    <div style={styles.smallGold}>
+                    <div
+                      style={
+                        styles.smallGold
+                      }
+                    >
                       PROJECT FILES
                     </div>
 
-                    <h2 style={styles.workspaceTitle}>
+                    <h2
+                      style={
+                        styles.workspaceTitle
+                      }
+                    >
                       Files & Code
                     </h2>
                   </div>
                 </div>
 
-                <div style={styles.lockedFilesCard}>
-                  <div style={styles.lockIcon}>
+                <div
+                  style={
+                    styles.lockedFilesCard
+                  }
+                >
+                  <div
+                    style={
+                      styles.lockIcon
+                    }
+                  >
                     🔒
                   </div>
 
-                  <h3 style={styles.lockedFilesCardH3}>
+                  <h3
+                    style={
+                      styles.lockedFilesCardH3
+                    }
+                  >
                     SOURCE CODE LOCKED
                   </h3>
 
-                  <p style={styles.lockedFilesCardP}>
-                    BOMBA AI protects generated project
-                    source code and ZIP files from normal
-                    users. Preview and project use can be
-                    provided while source access remains
-                    protected.
+                  <p
+                    style={
+                      styles.lockedFilesCardP
+                    }
+                  >
+                    BOMBA AI protects generated
+                    project source code and ZIP files
+                    from normal users. Preview and
+                    project use can be provided while
+                    source access remains protected.
                   </p>
 
-                  <div style={styles.lockedFileStatus}>
-                    <span>Project files generated:</span>
+                  <div
+                    style={
+                      styles.lockedFileStatus
+                    }
+                  >
+                    <span>
+                      Project files generated:
+                    </span>
+
                     <strong>
                       {Array.isArray(
                         builderProject.project_files
                       ) &&
-                      builderProject.project_files.length
+                      builderProject.project_files
+                        .length
                         ? " YES"
                         : currentStage > 0
                         ? " YES"
@@ -2188,23 +3037,47 @@ export default function Home() {
                     </strong>
                   </div>
 
-                  <div style={styles.lockedFileStatus}>
-                    <span>Source display:</span>
-                    <strong> LOCKED</strong>
+                  <div
+                    style={
+                      styles.lockedFileStatus
+                    }
+                  >
+                    <span>
+                      Source display:
+                    </span>
+
+                    <strong>
+                      {" "}
+                      LOCKED
+                    </strong>
                   </div>
 
-                  <div style={styles.lockedFileStatus}>
-                    <span>ZIP export:</span>
-                    <strong> LOCKED</strong>
+                  <div
+                    style={
+                      styles.lockedFileStatus
+                    }
+                  >
+                    <span>
+                      ZIP export:
+                    </span>
+
+                    <strong>
+                      {" "}
+                      LOCKED
+                    </strong>
                   </div>
                 </div>
 
                 <button
                   type="button"
                   onClick={() =>
-                    setBuilderView("workspace")
+                    setBuilderView(
+                      "workspace"
+                    )
                   }
-                  style={styles.workspaceButtonPrimary}
+                  style={
+                    styles.workspaceButtonPrimary
+                  }
                 >
                   ← BACK TO WORKSPACE
                 </button>
@@ -2215,17 +3088,25 @@ export default function Home() {
         <section style={styles.workspace}>
           <div style={styles.sectionTop}>
             <div>
-              <div style={styles.smallGold}>
+              <div
+                style={styles.smallGold}
+              >
                 CREATE
               </div>
 
-              <h2 style={styles.sectionTitle}>
+              <h2
+                style={styles.sectionTitle}
+              >
                 AI Flyer Generator
               </h2>
             </div>
 
-            <div style={styles.liveBadge}>
-              <span style={styles.liveDot}></span>
+            <div
+              style={styles.liveBadge}
+            >
+              <span
+                style={styles.liveDot}
+              ></span>
               AI READY
             </div>
           </div>
@@ -2246,20 +3127,24 @@ export default function Home() {
             />
 
             <div style={styles.helper}>
-              Be specific about the event, business,
-              colors, text, style and information you want
-              on the flyer.
+              Be specific about the event,
+              business, colors, text, style and
+              information you want on the flyer.
             </div>
 
             <div style={styles.uploadBox}>
-              <div style={styles.uploadTitle}>
+              <div
+                style={styles.uploadTitle}
+              >
                 📸 Add your photos or logos
               </div>
 
-              <div style={styles.uploadText}>
-                Upload up to 3 images. Tell BOMBA AI how
-                you want them positioned, or ask it to
-                arrange them professionally.
+              <div
+                style={styles.uploadText}
+              >
+                Upload up to 3 images. Tell BOMBA
+                AI how you want them positioned, or
+                ask it to arrange them professionally.
               </div>
 
               <input
@@ -2276,36 +3161,51 @@ export default function Home() {
                 onClick={() =>
                   fileInputRef.current?.click()
                 }
-                disabled={uploadedImages.length >= 3}
+                disabled={
+                  uploadedImages.length >= 3
+                }
                 style={{
                   ...styles.uploadButton,
                   opacity:
-                    uploadedImages.length >= 3
+                    uploadedImages.length >=
+                    3
                       ? 0.5
                       : 1,
                 }}
               >
                 📷{" "}
                 {uploadedImages.length
-                  ? uploadedImages.length >= 3
+                  ? uploadedImages.length >=
+                    3
                     ? "3 Photos Added"
                     : "Add More Photos"
                   : "Upload Up to 3 Photos / Logos"}
               </button>
 
-              {uploadedImages.length > 0 && (
+              {uploadedImages.length >
+                0 && (
                 <>
-                  <div style={styles.imageCount}>
-                    {uploadedImages.length} / 3 images
-                    selected
+                  <div
+                    style={
+                      styles.imageCount
+                    }
+                  >
+                    {uploadedImages.length} / 3
+                    images selected
                   </div>
 
-                  <div style={styles.uploadGrid}>
+                  <div
+                    style={
+                      styles.uploadGrid
+                    }
+                  >
                     {uploadedImages.map(
                       (item, index) => (
                         <div
                           key={`${item.name}-${index}`}
-                          style={styles.multiUploadCard}
+                          style={
+                            styles.multiUploadCard
+                          }
                         >
                           <div
                             style={
@@ -2325,7 +3225,8 @@ export default function Home() {
                                 styles.photoLabel
                               }
                             >
-                              Picture {index + 1}
+                              Picture{" "}
+                              {index + 1}
                             </div>
                           </div>
 
@@ -2361,11 +3262,23 @@ export default function Home() {
                             }
                           >
                             {[
-                              ["left", "Left"],
-                              ["center", "Center"],
-                              ["right", "Right"],
+                              [
+                                "left",
+                                "Left",
+                              ],
+                              [
+                                "center",
+                                "Center",
+                              ],
+                              [
+                                "right",
+                                "Right",
+                              ],
                             ].map(
-                              ([value, label]) => (
+                              ([
+                                value,
+                                label,
+                              ]) => (
                                 <button
                                   key={value}
                                   type="button"
@@ -2379,7 +3292,8 @@ export default function Home() {
                                     ...styles.positionButton,
                                     ...(photoPositions[
                                       index
-                                    ] === value
+                                    ] ===
+                                    value
                                       ? styles.positionButtonActive
                                       : {}),
                                   }}
@@ -2408,25 +3322,58 @@ export default function Home() {
                     )}
                   </div>
 
-                  <div style={styles.controlsBox}>
-                    <div style={styles.controlGroup}>
-                      <div style={styles.controlTitle}>
+                  <div
+                    style={
+                      styles.controlsBox
+                    }
+                  >
+                    <div
+                      style={
+                        styles.controlGroup
+                      }
+                    >
+                      <div
+                        style={
+                          styles.controlTitle
+                        }
+                      >
                         📐 Photo Size
                       </div>
 
-                      <div style={styles.optionRow}>
+                      <div
+                        style={
+                          styles.optionRow
+                        }
+                      >
                         {[
-                          ["small", "Small"],
-                          ["medium", "Medium"],
-                          ["large", "Large"],
-                          ["full", "Full"],
+                          [
+                            "small",
+                            "Small",
+                          ],
+                          [
+                            "medium",
+                            "Medium",
+                          ],
+                          [
+                            "large",
+                            "Large",
+                          ],
+                          [
+                            "full",
+                            "Full",
+                          ],
                         ].map(
-                          ([value, label]) => (
+                          ([
+                            value,
+                            label,
+                          ]) => (
                             <button
                               key={value}
                               type="button"
                               onClick={() =>
-                                setPhotoSize(value)
+                                setPhotoSize(
+                                  value
+                                )
                               }
                               style={{
                                 ...styles.optionButton,
@@ -2443,38 +3390,67 @@ export default function Home() {
                       </div>
                     </div>
 
-                    <div style={styles.arrangementCard}>
-                      <div style={styles.arrangementTitle}>
+                    <div
+                      style={
+                        styles.arrangementCard
+                      }
+                    >
+                      <div
+                        style={
+                          styles.arrangementTitle
+                        }
+                      >
                         🤖 Smart Arrangement
                       </div>
 
-                      <div style={styles.arrangementText}>
-                        You can also tell BOMBA AI in your
-                        description how to arrange the
-                        pictures. For example:
+                      <div
+                        style={
+                          styles.arrangementText
+                        }
+                      >
+                        You can also tell BOMBA AI in
+                        your description how to arrange
+                        the pictures. For example:
                       </div>
 
-                      <div style={styles.arrangementExample}>
-                        "Picture 1 on the left, Picture 2 in
-                        the center, Picture 3 on the right."
+                      <div
+                        style={
+                          styles.arrangementExample
+                        }
+                      >
+                        "Picture 1 on the left, Picture 2
+                        in the center, Picture 3 on the
+                        right."
                       </div>
 
-                      <div style={styles.arrangementExample}>
+                      <div
+                        style={
+                          styles.arrangementExample
+                        }
+                      >
                         Or: "Arrange all three pictures
                         professionally."
                       </div>
                     </div>
 
-                    <div style={styles.controlNote}>
-                      ✓ BOMBA AI will receive all selected
-                      pictures and their requested
-                      positions.
+                    <div
+                      style={
+                        styles.controlNote
+                      }
+                    >
+                      ✓ BOMBA AI will receive all
+                      selected pictures and their
+                      requested positions.
                     </div>
 
                     <button
                       type="button"
-                      onClick={clearUploadedImages}
-                      style={styles.clearPhotosButton}
+                      onClick={
+                        clearUploadedImages
+                      }
+                      style={
+                        styles.clearPhotosButton
+                      }
                     >
                       ✕ Clear All Photos
                     </button>
@@ -2489,12 +3465,16 @@ export default function Home() {
               disabled={loading}
               style={{
                 ...styles.generateButton,
-                opacity: loading ? 0.65 : 1,
+                opacity: loading
+                  ? 0.65
+                  : 1,
               }}
             >
               {loading ? (
                 <>
-                  <span style={styles.spinner}></span>
+                  <span
+                    style={styles.spinner}
+                  ></span>
                   BOMBA IS CREATING...
                 </>
               ) : (
@@ -2510,33 +3490,50 @@ export default function Home() {
           </div>
 
           {loading && (
-            <div style={styles.loadingCard}>
-              <div style={styles.loadingLogo}>
+            <div
+              style={styles.loadingCard}
+            >
+              <div
+                style={styles.loadingLogo}
+              >
                 TB
               </div>
 
-              <h3 style={styles.loadingTitle}>
+              <h3
+                style={styles.loadingTitle}
+              >
                 BOMBA AI is creating your flyer
               </h3>
 
-              <p style={styles.loadingText}>
-                Understanding your request → using your
-                uploaded pictures → applying your photo
-                positions → designing the composition →
+              <p
+                style={styles.loadingText}
+              >
+                Understanding your request →
+                using your uploaded pictures →
+                applying your photo positions →
+                designing the composition →
                 generating the flyer
               </p>
             </div>
           )}
 
           {image && !loading && (
-            <div style={styles.resultSection}>
-              <div style={styles.resultHeader}>
+            <div
+              style={styles.resultSection}
+            >
+              <div
+                style={styles.resultHeader}
+              >
                 <div>
-                  <div style={styles.smallGold}>
+                  <div
+                    style={styles.smallGold}
+                  >
                     RESULT
                   </div>
 
-                  <h2 style={styles.resultTitle}>
+                  <h2
+                    style={styles.resultTitle}
+                  >
                     Your BOMBA Flyer
                   </h2>
                 </div>
@@ -2544,17 +3541,23 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={downloadImage}
-                  style={styles.downloadButton}
+                  style={
+                    styles.downloadButton
+                  }
                 >
                   ↓ Download
                 </button>
               </div>
 
-              <div style={styles.imageFrame}>
+              <div
+                style={styles.imageFrame}
+              >
                 <img
                   src={image}
                   alt="BOMBA AI generated flyer"
-                  style={styles.generatedImage}
+                  style={
+                    styles.generatedImage
+                  }
                 />
               </div>
 
@@ -2568,7 +3571,9 @@ export default function Home() {
                     behavior: "smooth",
                   });
                 }}
-                style={styles.createAnother}
+                style={
+                  styles.createAnother
+                }
               >
                 + Create Another Flyer
               </button>
@@ -2578,12 +3583,16 @@ export default function Home() {
       )}
 
       <footer style={styles.footer}>
-        <div style={styles.footerLogo}>TB</div>
+        <div style={styles.footerLogo}>
+          TB
+        </div>
 
         <div>
           <strong>BOMBA AI</strong>
 
-          <div style={styles.footerText}>
+          <div
+            style={styles.footerText}
+          >
             {BRAND.tagline}
           </div>
         </div>
@@ -2611,7 +3620,8 @@ const styles = {
     position: "sticky",
     top: 0,
     zIndex: 120,
-    background: "rgba(5,5,5,0.96)",
+    background:
+      "rgba(5,5,5,0.96)",
     backdropFilter: "blur(12px)",
   },
 
@@ -2668,7 +3678,8 @@ const styles = {
     height: "42px",
     fontSize: "20px",
     cursor: "pointer",
-    transition: "all 0.2s ease",
+    transition:
+      "all 0.2s ease",
   },
 
   menuButtonOpen: {
@@ -2681,7 +3692,8 @@ const styles = {
     position: "fixed",
     inset: 0,
     zIndex: 90,
-    background: "rgba(0,0,0,0.48)",
+    background:
+      "rgba(0,0,0,0.48)",
   },
 
   menuPanel: {
@@ -2689,7 +3701,8 @@ const styles = {
     top: "72px",
     right: "16px",
     width: "260px",
-    maxWidth: "calc(100vw - 32px)",
+    maxWidth:
+      "calc(100vw - 32px)",
     background: "#0d0d0d",
     border: "1px solid #303030",
     borderRadius: "16px",
@@ -2702,7 +3715,8 @@ const styles = {
   menuHeader: {
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent:
+      "space-between",
     padding: "10px 9px 12px",
   },
 
@@ -2797,7 +3811,8 @@ const styles = {
 
   heroTitle: {
     margin: 0,
-    fontSize: "clamp(34px, 9vw, 64px)",
+    fontSize:
+      "clamp(34px, 9vw, 64px)",
     lineHeight: 1.02,
     fontWeight: 950,
     letterSpacing: "-2px",
@@ -2833,7 +3848,8 @@ const styles = {
   },
 
   featureActive: {
-    border: "1px solid #FFD43B",
+    border:
+      "1px solid #FFD43B",
     background: "#171406",
     boxShadow:
       "0 0 18px rgba(255,212,59,0.08)",
@@ -2859,7 +3875,8 @@ const styles = {
   sectionTop: {
     display: "flex",
     alignItems: "flex-end",
-    justifyContent: "space-between",
+    justifyContent:
+      "space-between",
     gap: "15px",
     marginBottom: "14px",
   },
@@ -3189,7 +4206,8 @@ const styles = {
   workspaceHeader: {
     display: "flex",
     alignItems: "flex-start",
-    justifyContent: "space-between",
+    justifyContent:
+      "space-between",
     gap: "12px",
     marginBottom: "18px",
   },
@@ -3242,7 +4260,8 @@ const styles = {
   progressTop: {
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent:
+      "space-between",
     gap: "10px",
   },
 
@@ -3269,7 +4288,8 @@ const styles = {
     height: "100%",
     background: "#FFD43B",
     borderRadius: "999px",
-    transition: "width 0.3s ease",
+    transition:
+      "width 0.3s ease",
   },
 
   progressNote: {
@@ -3487,7 +4507,8 @@ const styles = {
 
   lockedFileStatus: {
     display: "flex",
-    justifyContent: "space-between",
+    justifyContent:
+      "space-between",
     gap: "10px",
     background: "#111111",
     border: "1px solid #222222",
@@ -3737,7 +4758,8 @@ const styles = {
   },
 
   positionButtonActive: {
-    border: "1px solid #FFD43B",
+    border:
+      "1px solid #FFD43B",
     background: "#211d08",
     color: "#FFD43B",
   },
@@ -3788,7 +4810,8 @@ const styles = {
   },
 
   optionButtonActive: {
-    border: "1px solid #FFD43B",
+    border:
+      "1px solid #FFD43B",
     background: "#211d08",
     color: "#FFD43B",
   },
@@ -3865,7 +4888,8 @@ const styles = {
     display: "inline-block",
     width: "13px",
     height: "13px",
-    border: "2px solid rgba(0,0,0,0.3)",
+    border:
+      "2px solid rgba(0,0,0,0.3)",
     borderTopColor: "#000000",
     borderRadius: "50%",
     marginRight: "8px",
@@ -3928,7 +4952,8 @@ const styles = {
   resultHeader: {
     display: "flex",
     alignItems: "flex-end",
-    justifyContent: "space-between",
+    justifyContent:
+      "space-between",
     gap: "10px",
     marginBottom: "12px",
   },
