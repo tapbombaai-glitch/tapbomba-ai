@@ -24,17 +24,40 @@ export async function POST(req) {
         ? body.prompt.trim()
         : "";
 
-    const referenceImage =
+    const referenceImages = Array.isArray(body?.referenceImages)
+      ? body.referenceImages.filter(
+          (item) => typeof item === "string" && item.length > 0
+        )
+      : [];
+
+    // Backward compatibility with the old single-photo version
+    const oldReferenceImage =
       typeof body?.referenceImage === "string"
         ? body.referenceImage
         : "";
+
+    const images =
+      referenceImages.length > 0
+        ? referenceImages.slice(0, 3)
+        : oldReferenceImage
+        ? [oldReferenceImage]
+        : [];
 
     const photoSize =
       typeof body?.photoSize === "string"
         ? body.photoSize
         : "medium";
 
-    const photoPosition =
+    const photoPositions = Array.isArray(body?.photoPositions)
+      ? body.photoPositions
+          .slice(0, 3)
+          .map((item) =>
+            typeof item === "string" ? item : "auto"
+          )
+      : [];
+
+    // Backward compatibility with the old single position
+    const oldPhotoPosition =
       typeof body?.photoPosition === "string"
         ? body.photoPosition
         : "center";
@@ -52,6 +75,22 @@ Create a professional square promotional flyer.
 USER REQUEST:
 ${prompt}
 
+IMPORTANT INSTRUCTION:
+The user's written instructions about the uploaded pictures are part of the design instructions.
+
+If the user gives explicit positions such as:
+- Picture 1 left
+- Picture 2 center
+- Picture 3 right
+
+FOLLOW THOSE POSITIONS EXACTLY.
+
+Do not randomly rearrange the pictures when the user has explicitly specified their positions.
+
+If the user says something like:
+"Arrange the three pictures professionally"
+or does not specify positions, intelligently arrange all supplied pictures into a balanced, attractive professional composition.
+
 DESIGN REQUIREMENTS:
 - Create the actual finished flyer.
 - Make it polished, premium, attractive, modern and professional.
@@ -59,77 +98,120 @@ DESIGN REQUIREMENTS:
 - Do not invent important information.
 - Use a strong visual hierarchy.
 - Make the final composition suitable for WhatsApp, Instagram and Facebook.
+- Use all supplied reference pictures when pictures are provided.
+- Do not ignore any supplied picture.
+- Do not replace supplied people with random people.
+- Preserve the identity and appearance of people in the supplied pictures.
 `;
 
-    if (referenceImage) {
+    if (images.length > 0) {
       const sizeInstruction = {
         small:
-          "Make the uploaded photo relatively small while keeping the person's face clearly visible.",
+          "Keep the supplied pictures relatively small while keeping important details and faces visible.",
         medium:
-          "Make the uploaded photo medium-sized and clearly visible without dominating the flyer.",
+          "Make the supplied pictures medium-sized and clearly visible without allowing them to dominate the flyer.",
         large:
-          "Make the uploaded photo large and prominent while keeping the flyer balanced.",
+          "Make the supplied pictures large and prominent while keeping the flyer balanced.",
         full:
-          "Make the uploaded photo very prominent and use it as a major part of the flyer composition.",
-      };
-
-      const positionInstruction = {
-        left: "Place the uploaded photo mainly on the LEFT side of the flyer.",
-        center:
-          "Place the uploaded photo mainly in the CENTER of the flyer.",
-        right:
-          "Place the uploaded photo mainly on the RIGHT side of the flyer.",
+          "Make the supplied pictures very prominent and use them as major parts of the flyer composition.",
       };
 
       finalPrompt += `
-UPLOADED PHOTO INSTRUCTION:
 
-An exact user-provided photo has been supplied with this request.
+UPLOADED PICTURES:
+There are ${images.length} user-provided picture(s).
 
-IMPORTANT:
-- Use the supplied photo as the person's actual reference.
-- Do NOT replace the person with another person.
-- Do NOT invent a different face.
-- Do NOT substitute another model.
-- Preserve the person's recognizable facial identity.
-- Keep the uploaded person's appearance as faithful to the supplied image as possible.
-- Do not create a random person instead of the uploaded person.
+You MUST use ALL ${images.length} supplied picture(s) in the final flyer.
 
 PHOTO SIZE:
 ${sizeInstruction[photoSize] || sizeInstruction.medium}
 
-PHOTO POSITION:
-${positionInstruction[photoPosition] || positionInstruction.center}
-
-Integrate the supplied photo naturally into the flyer while preserving the person's identity.
 `;
 
-      const imageResponse = await fetch(referenceImage);
+      images.forEach((_, index) => {
+        const position =
+          photoPositions[index] ||
+          (images.length === 1 ? oldPhotoPosition : "auto");
 
-      if (!imageResponse.ok) {
-        return NextResponse.json(
-          { error: "BOMBA AI could not read the uploaded photo." },
-          { status: 400 }
-        );
-      }
-
-      const imageBuffer = await imageResponse.arrayBuffer();
-
-      const mimeType =
-        imageResponse.headers.get("content-type") ||
-        "image/png";
-
-      const imageFile = new File(
-        [imageBuffer],
-        "bomba-reference-image.png",
-        {
-          type: mimeType,
+        if (position === "left") {
+          finalPrompt += `
+PICTURE ${index + 1} POSITION:
+Place Picture ${index + 1} mainly on the LEFT side of the flyer.
+Do not move it to the center or right unless necessary for a tiny amount of visual overlap.
+`;
+        } else if (position === "center") {
+          finalPrompt += `
+PICTURE ${index + 1} POSITION:
+Place Picture ${index + 1} mainly in the CENTER of the flyer.
+`;
+        } else if (position === "right") {
+          finalPrompt += `
+PICTURE ${index + 1} POSITION:
+Place Picture ${index + 1} mainly on the RIGHT side of the flyer.
+`;
+        } else {
+          finalPrompt += `
+PICTURE ${index + 1} POSITION:
+Arrange Picture ${index + 1} intelligently and professionally according to the overall flyer composition.
+`;
         }
-      );
+      });
+
+      finalPrompt += `
+
+PICTURE IDENTITY RULES:
+- Picture 1 means the FIRST uploaded picture.
+- Picture 2 means the SECOND uploaded picture.
+- Picture 3 means the THIRD uploaded picture.
+- Keep each picture recognizable.
+- Do not replace a supplied person with another person.
+- Do not invent a different face.
+- Do not substitute another model.
+- Do not discard any supplied picture.
+- Use the supplied pictures as the actual visual references.
+`;
+      
+      const imageFiles = [];
+
+      for (let index = 0; index < images.length; index++) {
+        const imageResponse = await fetch(images[index]);
+
+        if (!imageResponse.ok) {
+          return NextResponse.json(
+            {
+              error: `BOMBA AI could not read uploaded picture ${index + 1}.`,
+            },
+            { status: 400 }
+          );
+        }
+
+        const imageBuffer = await imageResponse.arrayBuffer();
+
+        const mimeType =
+          imageResponse.headers.get("content-type") ||
+          "image/png";
+
+        const extension =
+          mimeType.includes("jpeg") || mimeType.includes("jpg")
+            ? "jpg"
+            : mimeType.includes("webp")
+            ? "webp"
+            : "png";
+
+        const imageFile = new File(
+          [imageBuffer],
+          `bomba-reference-${index + 1}.${extension}`,
+          {
+            type: mimeType,
+          }
+        );
+
+        imageFiles.push(imageFile);
+      }
 
       const result = await openai.images.edit({
         model: "gpt-image-2",
-        image: imageFile,
+        image: imageFiles,
         prompt: finalPrompt,
         size: "1024x1024",
       });
