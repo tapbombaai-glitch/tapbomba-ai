@@ -26,12 +26,12 @@ export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [image, setImage] = useState("");
   const [uploadedImages, setUploadedImages] = useState([]);
-const [photoSize, setPhotoSize] = useState("medium");
-const [photoPositions, setPhotoPositions] = useState([
-  "left",
-  "center",
-  "right",
-]);
+  const [photoSize, setPhotoSize] = useState("medium");
+  const [photoPositions, setPhotoPositions] = useState([
+    "left",
+    "center",
+    "right",
+  ]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -55,49 +55,156 @@ const [photoPositions, setPhotoPositions] = useState([
   const fileInputRef = useRef(null);
 
   function handleImageUpload(event) {
-    const file = event.target.files?.[0];
+    const files = Array.from(event.target.files || []);
 
-    if (!file) return;
+    if (!files.length) return;
 
-    if (!file.type.startsWith("image/")) {
-      setError("Please upload an image file.");
+    const remainingSlots = 3 - uploadedImages.length;
+
+    if (remainingSlots <= 0) {
+      setError("You can upload up to 3 images.");
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
       return;
     }
 
-    if (file.size > 8 * 1024 * 1024) {
-      setError("Please choose an image smaller than 8MB.");
-      return;
-    }
+    const selectedFiles = files.slice(0, remainingSlots);
 
-    const reader = new FileReader();
-
-    reader.onload = () => {
-      setUploadedImage(reader.result);
-      setUploadedName(file.name);
+    if (files.length > remainingSlots) {
+      setError(
+        "You can upload up to 3 images. Only the available slots were added."
+      );
+    } else {
       setError("");
-    };
+    }
 
-    reader.onerror = () => {
-      setError("BOMBA AI could not read that image.");
-    };
+    const invalidType = selectedFiles.find(
+      (file) => !file.type.startsWith("image/")
+    );
 
-    reader.readAsDataURL(file);
+    if (invalidType) {
+      setError("Please upload image files only.");
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+
+      return;
+    }
+
+    const oversized = selectedFiles.find(
+      (file) => file.size > 8 * 1024 * 1024
+    );
+
+    if (oversized) {
+      setError("Each image must be smaller than 8MB.");
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+
+      return;
+    }
+
+    let completed = 0;
+    const newImages = [];
+
+    selectedFiles.forEach((file) => {
+      const reader = new FileReader();
+
+      reader.onload = () => {
+        newImages.push({
+          image: reader.result,
+          name: file.name,
+        });
+
+        completed += 1;
+
+        if (completed === selectedFiles.length) {
+          setUploadedImages((current) => {
+            const combined = [...current, ...newImages].slice(
+              0,
+              3
+            );
+
+            return combined;
+          });
+
+          setError("");
+
+          if (fileInputRef.current) {
+            fileInputRef.current.value = "";
+          }
+        }
+      };
+
+      reader.onerror = () => {
+        setError(
+          "BOMBA AI could not read one of the selected images."
+        );
+
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+      };
+
+      reader.readAsDataURL(file);
+    });
   }
 
-  function removeUploadedImage() {
-    setUploadedImage("");
-    setUploadedName("");
+  function removeUploadedImage(index) {
+    setUploadedImages((current) =>
+      current.filter((_, imageIndex) => imageIndex !== index)
+    );
+
+    setPhotoPositions((current) =>
+      current.filter((_, positionIndex) => positionIndex !== index)
+    );
 
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+
+    setError("");
+  }
+
+  function clearUploadedImages() {
+    setUploadedImages([]);
+    setPhotoPositions([
+      "left",
+      "center",
+      "right",
+    ]);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+
+    setError("");
+  }
+
+  function setPositionForImage(index, value) {
+    setPhotoPositions((current) => {
+      const next = [...current];
+
+      while (next.length < 3) {
+        next.push(["left", "center", "right"][next.length]);
+      }
+
+      next[index] = value;
+
+      return next;
+    });
   }
 
   async function generateFlyer() {
     const text = prompt.trim();
 
     if (!text) {
-      setError("Describe the flyer you want BOMBA AI to create.");
+      setError(
+        "Describe the flyer you want BOMBA AI to create."
+      );
       return;
     }
 
@@ -114,9 +221,30 @@ const [photoPositions, setPhotoPositions] = useState([
         body: JSON.stringify({
           prompt: text,
           type: "flyer",
-          referenceImage: uploadedImage || null,
-          photoSize: uploadedImage ? photoSize : null,
-          photoPosition: uploadedImage ? photoPosition : null,
+
+          referenceImages: uploadedImages.map(
+            (item) => item.image
+          ),
+
+          photoSize: uploadedImages.length
+            ? photoSize
+            : null,
+
+          photoPositions: uploadedImages.length
+            ? photoPositions.slice(
+                0,
+                uploadedImages.length
+              )
+            : null,
+
+          // Kept for compatibility with the current
+          // single-image backend until it is updated.
+          referenceImage:
+            uploadedImages[0]?.image || null,
+
+          photoPosition: uploadedImages.length
+            ? photoPositions[0]
+            : null,
         }),
       });
 
@@ -130,7 +258,9 @@ const [photoPositions, setPhotoPositions] = useState([
       }
 
       if (!data?.image) {
-        throw new Error("The AI did not return an image.");
+        throw new Error(
+          "The AI did not return an image."
+        );
       }
 
       setImage(data.image);
@@ -183,7 +313,9 @@ const [photoPositions, setPhotoPositions] = useState([
     const text = builderPrompt.trim();
 
     if (!text) {
-      setError("Describe what you want BOMBA AI to build.");
+      setError(
+        "Describe what you want BOMBA AI to build."
+      );
       return;
     }
 
@@ -2047,18 +2179,20 @@ const [photoPositions, setPhotoPositions] = useState([
 
             <div style={styles.uploadBox}>
               <div style={styles.uploadTitle}>
-                📸 Add your photo or logo
+                📸 Add your photos or logos
               </div>
 
               <div style={styles.uploadText}>
-                Upload an image that BOMBA AI should use in
-                your flyer.
+                Upload up to 3 images. Tell BOMBA AI how
+                you want them positioned, or ask it to
+                arrange them professionally.
               </div>
 
               <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
+                multiple
                 onChange={handleImageUpload}
                 style={styles.hiddenInput}
               />
@@ -2068,39 +2202,136 @@ const [photoPositions, setPhotoPositions] = useState([
                 onClick={() =>
                   fileInputRef.current?.click()
                 }
-                style={styles.uploadButton}
+                disabled={uploadedImages.length >= 3}
+                style={{
+                  ...styles.uploadButton,
+                  opacity:
+                    uploadedImages.length >= 3
+                      ? 0.5
+                      : 1,
+                }}
               >
                 📷{" "}
-                {uploadedImage
-                  ? "Change Photo / Logo"
-                  : "Upload Photo / Logo"}
+                {uploadedImages.length
+                  ? uploadedImages.length >= 3
+                    ? "3 Photos Added"
+                    : "Add More Photos"
+                  : "Upload Up to 3 Photos / Logos"}
               </button>
 
-              {uploadedImage && (
+              {uploadedImages.length > 0 && (
                 <>
-                  <div style={styles.uploadPreview}>
-                    <img
-                      src={uploadedImage}
-                      alt="Uploaded photo or logo"
-                      style={styles.previewImage}
-                    />
+                  <div style={styles.imageCount}>
+                    {uploadedImages.length} / 3 images
+                    selected
+                  </div>
 
-                    <div style={styles.uploadInfo}>
-                      <div style={styles.uploadedName}>
-                        {uploadedName ||
-                          "Uploaded image"}
-                      </div>
+                  <div style={styles.uploadGrid}>
+                    {uploadedImages.map(
+                      (item, index) => (
+                        <div
+                          key={`${item.name}-${index}`}
+                          style={styles.multiUploadCard}
+                        >
+                          <div
+                            style={
+                              styles.multiImageHeader
+                            }
+                          >
+                            <div
+                              style={
+                                styles.photoNumber
+                              }
+                            >
+                              {index + 1}
+                            </div>
 
-                      <button
-                        type="button"
-                        onClick={
-                          removeUploadedImage
-                        }
-                        style={styles.removeButton}
-                      >
-                        ✕ Remove
-                      </button>
-                    </div>
+                            <div
+                              style={
+                                styles.photoLabel
+                              }
+                            >
+                              Picture {index + 1}
+                            </div>
+                          </div>
+
+                          <img
+                            src={item.image}
+                            alt={`Uploaded picture ${
+                              index + 1
+                            }`}
+                            style={
+                              styles.multiPreviewImage
+                            }
+                          />
+
+                          <div
+                            style={
+                              styles.multiImageName
+                            }
+                          >
+                            {item.name}
+                          </div>
+
+                          <div
+                            style={
+                              styles.positionLabel
+                            }
+                          >
+                            Position
+                          </div>
+
+                          <div
+                            style={
+                              styles.positionOptions
+                            }
+                          >
+                            {[
+                              ["left", "Left"],
+                              ["center", "Center"],
+                              ["right", "Right"],
+                            ].map(
+                              ([value, label]) => (
+                                <button
+                                  key={value}
+                                  type="button"
+                                  onClick={() =>
+                                    setPositionForImage(
+                                      index,
+                                      value
+                                    )
+                                  }
+                                  style={{
+                                    ...styles.positionButton,
+                                    ...(photoPositions[
+                                      index
+                                    ] === value
+                                      ? styles.positionButtonActive
+                                      : {}),
+                                  }}
+                                >
+                                  {label}
+                                </button>
+                              )
+                            )}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              removeUploadedImage(
+                                index
+                              )
+                            }
+                            style={
+                              styles.removePhotoButton
+                            }
+                          >
+                            ✕ Remove Picture
+                          </button>
+                        </div>
+                      )
+                    )}
                   </div>
 
                   <div style={styles.controlsBox}>
@@ -2121,9 +2352,7 @@ const [photoPositions, setPhotoPositions] = useState([
                               key={value}
                               type="button"
                               onClick={() =>
-                                setPhotoSize(
-                                  value
-                                )
+                                setPhotoSize(value)
                               }
                               style={{
                                 ...styles.optionButton,
@@ -2140,46 +2369,41 @@ const [photoPositions, setPhotoPositions] = useState([
                       </div>
                     </div>
 
-                    <div style={styles.controlGroup}>
-                      <div style={styles.controlTitle}>
-                        ↔️ Photo Position
+                    <div style={styles.arrangementCard}>
+                      <div style={styles.arrangementTitle}>
+                        🤖 Smart Arrangement
                       </div>
 
-                      <div style={styles.optionRow}>
-                        {[
-                          ["left", "Left"],
-                          ["center", "Center"],
-                          ["right", "Right"],
-                        ].map(
-                          ([value, label]) => (
-                            <button
-                              key={value}
-                              type="button"
-                              onClick={() =>
-                                setPhotoPosition(
-                                  value
-                                )
-                              }
-                              style={{
-                                ...styles.optionButton,
-                                ...(photoPosition ===
-                                value
-                                  ? styles.optionButtonActive
-                                  : {}),
-                              }}
-                            >
-                              {label}
-                            </button>
-                          )
-                        )}
+                      <div style={styles.arrangementText}>
+                        You can also tell BOMBA AI in your
+                        description how to arrange the
+                        pictures. For example:
+                      </div>
+
+                      <div style={styles.arrangementExample}>
+                        "Picture 1 on the left, Picture 2 in
+                        the center, Picture 3 on the right."
+                      </div>
+
+                      <div style={styles.arrangementExample}>
+                        Or: "Arrange all three pictures
+                        professionally."
                       </div>
                     </div>
 
                     <div style={styles.controlNote}>
-                      ✓ BOMBA AI will use your uploaded
-                      image as the photo reference instead
-                      of creating a different person.
+                      ✓ BOMBA AI will receive all selected
+                      pictures and their requested
+                      positions.
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={clearUploadedImages}
+                      style={styles.clearPhotosButton}
+                    >
+                      ✕ Clear All Photos
+                    </button>
                   </div>
                 </>
               )}
@@ -2223,8 +2447,8 @@ const [photoPositions, setPhotoPositions] = useState([
 
               <p style={styles.loadingText}>
                 Understanding your request → using your
-                uploaded image → applying your photo
-                settings → designing the composition →
+                uploaded pictures → applying your photo
+                positions → designing the composition →
                 generating the flyer
               </p>
             </div>
@@ -3343,45 +3567,116 @@ const styles = {
     cursor: "pointer",
   },
 
-  uploadPreview: {
-    display: "flex",
-    alignItems: "center",
-    gap: "12px",
-    marginTop: "14px",
-    padding: "10px",
-    borderRadius: "11px",
+  imageCount: {
+    marginTop: "12px",
+    color: "#FFD43B",
+    fontSize: "10px",
+    fontWeight: 800,
+  },
+
+  uploadGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(3, minmax(0, 1fr))",
+    gap: "9px",
+    marginTop: "10px",
+  },
+
+  multiUploadCard: {
+    minWidth: 0,
     background: "#111111",
     border: "1px solid #252525",
+    borderRadius: "11px",
+    padding: "9px",
   },
 
-  previewImage: {
-    width: "70px",
-    height: "70px",
-    objectFit: "cover",
-    borderRadius: "9px",
-    border: "1px solid #3a3a3a",
+  multiImageHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    marginBottom: "8px",
   },
 
-  uploadInfo: {
-    minWidth: 0,
+  photoNumber: {
+    width: "23px",
+    height: "23px",
+    flexShrink: 0,
+    borderRadius: "7px",
+    background: "#211d08",
+    border: "1px solid #4b411d",
+    color: "#FFD43B",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "10px",
+    fontWeight: 950,
   },
 
-  uploadedName: {
-    fontSize: "11px",
+  photoLabel: {
     color: "#dddddd",
+    fontSize: "10px",
+    fontWeight: 900,
+  },
+
+  multiPreviewImage: {
+    width: "100%",
+    aspectRatio: "1 / 1",
+    objectFit: "cover",
+    display: "block",
+    borderRadius: "8px",
+    border: "1px solid #333333",
+  },
+
+  multiImageName: {
+    color: "#777777",
+    fontSize: "8px",
+    marginTop: "6px",
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
-    maxWidth: "210px",
   },
 
-  removeButton: {
-    marginTop: "7px",
+  positionLabel: {
+    color: "#999999",
+    fontSize: "9px",
+    fontWeight: 800,
+    marginTop: "9px",
+    marginBottom: "5px",
+  },
+
+  positionOptions: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(3, minmax(0, 1fr))",
+    gap: "3px",
+  },
+
+  positionButton: {
+    border: "1px solid #303030",
+    background: "#121212",
+    color: "#999999",
+    borderRadius: "6px",
+    padding: "6px 2px",
+    fontSize: "8px",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+
+  positionButtonActive: {
+    border: "1px solid #FFD43B",
+    background: "#211d08",
+    color: "#FFD43B",
+  },
+
+  removePhotoButton: {
+    width: "100%",
+    marginTop: "8px",
     border: "none",
     background: "transparent",
     color: "#ff7777",
-    padding: 0,
-    fontSize: "11px",
+    padding: "4px 0",
+    fontSize: "8px",
+    fontWeight: 700,
     cursor: "pointer",
   },
 
@@ -3424,6 +3719,37 @@ const styles = {
     color: "#FFD43B",
   },
 
+  arrangementCard: {
+    marginBottom: "15px",
+    padding: "12px",
+    borderRadius: "10px",
+    background: "#111111",
+    border: "1px solid #292929",
+  },
+
+  arrangementTitle: {
+    color: "#FFD43B",
+    fontSize: "11px",
+    fontWeight: 900,
+  },
+
+  arrangementText: {
+    color: "#858585",
+    fontSize: "10px",
+    lineHeight: 1.5,
+    marginTop: "5px",
+  },
+
+  arrangementExample: {
+    color: "#c0c0c0",
+    fontSize: "10px",
+    lineHeight: 1.5,
+    marginTop: "7px",
+    padding: "7px",
+    background: "#090909",
+    borderRadius: "7px",
+  },
+
   controlNote: {
     color: "#9d9d9d",
     fontSize: "10px",
@@ -3431,6 +3757,19 @@ const styles = {
     background: "#111111",
     borderRadius: "9px",
     padding: "9px",
+  },
+
+  clearPhotosButton: {
+    width: "100%",
+    marginTop: "9px",
+    border: "1px solid #3d2020",
+    background: "#160b0b",
+    color: "#ff8888",
+    borderRadius: "9px",
+    padding: "9px",
+    fontSize: "10px",
+    fontWeight: 800,
+    cursor: "pointer",
   },
 
   generateButton: {
