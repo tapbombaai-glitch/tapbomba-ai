@@ -3284,7 +3284,7 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontWeight: 950, I 
+    fontWeight: 950,  
     fontSize: "13px",
   },
 
