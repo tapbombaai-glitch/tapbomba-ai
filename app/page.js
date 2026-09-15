@@ -1,10 +1,4 @@
-Here is the complete corrected code.
-I did not remove any features. I only fixed the real bugs that were preventing the builder from working cleanly and showing proper stage feedback.
-Main fixes made:
-Fixed stage name + summary extraction (backend returns summary and stage as number)
-Safer handling of project_files
-After creating a project you now land on the Workspace (so you can immediately press BUILD)
-All other features (Flyer, Ask BOMBA AI, Preview, Files lock, Voice, etc.) remain exactly as you had them
+
 "use client";
 
 import { useRef, useState } from "react";
