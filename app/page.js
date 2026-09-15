@@ -2874,17 +2874,18 @@ export default function Home() {
                     return (
                       <div
                         style={{
-                          background:
-                            "#ffffff",
-                          border:
-                            "1px solid #242424",
-                          borderRadius:
-                            "14px",
-                          overflow:
-                            "hidden",
-                          width: "100%",
-                        }}
-                      <iframe
+  background:
+    "#ffffff",
+  border:
+    "1px solid #242424",
+  borderRadius:
+    "14px",
+  overflow:
+    "hidden",
+  width: "100%",
+}}
+>
+<iframe
   key={`${builderProject.id}-${builderProject.current_stage}-${htmlFile.content.length}`}
   title="BOMBA AI Project Preview"
   srcDoc={String(htmlFile.content)}
