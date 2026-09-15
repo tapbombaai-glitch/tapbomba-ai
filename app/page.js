@@ -2901,7 +2901,7 @@ export default function Home() {
                             background:
                               "#ffffff",
                           }}
-                          sandbox="allow-scripts allow-forms"
+                          sandbox="allow-scripts allow-forms allow-modals"
                         />
                       </div>
                     );
