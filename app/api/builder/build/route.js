@@ -43,7 +43,9 @@ function mergeFiles(existingFiles, generatedFiles) {
 
   for (const generatedFile of normalizeFiles(generatedFiles)) {
     const index = files.findIndex(
-      (file) => file.path === generatedFile.path
+      (file) =>
+        cleanFilePath(file.path).toLowerCase() ===
+        cleanFilePath(generatedFile.path).toLowerCase()
     );
 
     if (index >= 0) {
@@ -59,7 +61,8 @@ function mergeFiles(existingFiles, generatedFiles) {
 function getIndexFile(files) {
   return files.find(
     (file) =>
-      cleanFilePath(file.path).toLowerCase() === "index.html"
+      cleanFilePath(file.path).toLowerCase() ===
+      "index.html"
   );
 }
 
@@ -68,225 +71,480 @@ function stageInstructions(stageNumber) {
     1: `
 FOUNDATION STAGE
 
-Create a real working application foundation (not a design mockup).
+Create a real working application foundation.
 
 Must include:
 - Complete valid HTML5 document
 - Professional responsive layout
 - Application header
-- Working navigation (desktop + mobile)
+- Working navigation
+- Desktop and mobile navigation
 - Main content area
-- Clear theme and reusable UI patterns
-- A real home/dashboard screen
-- Navigation that actually switches content (using JavaScript)
+- Real dashboard/home screen
+- JavaScript-based screen switching
+- Real event listeners
+- No fake buttons
 
-The shell must already feel like the beginning of a real product.
+The application must already run directly in a browser.
 `,
 
     2: `
 DATA AND STORAGE STAGE
 
-Add a real data layer using vanilla JavaScript.
+Add the application's real data layer.
 
 Must implement:
-- Clear data model (arrays of objects)
-- Realistic sample/demo data
-- localStorage load + save
-- Functions to get, add, update, delete data
+- Clear JavaScript data model
+- Arrays/objects representing application data
+- Realistic initial/demo data where appropriate
+- localStorage load helpers
+- localStorage save helpers
+- Add functions
+- Update functions
+- Delete functions
 - Empty states
-- UI that is rendered from the data (not hard-coded cards)
+- UI rendered from live data
 
-All later stages must reuse this data layer.
+Do not hard-code data into visual cards when the data should be dynamic.
+
+The application must preserve data after browser refresh.
 `,
 
     3: `
 SCREENS AND WORKFLOWS STAGE
 
-Build the major functional screens from the plan.
+Build the major functional screens from the project plan.
 
-Navigation must actually switch between sections using JavaScript.
-Each screen must be connected to the shared data model.
-Do not create disconnected pages.
+Requirements:
+- Navigation actually switches screens
+- Screens use the shared application state
+- Forms actually submit
+- Buttons perform real actions
+- Data changes are reflected immediately
+- No disconnected mock pages
+- No placeholder interactions
+
+Every major workflow must be usable from beginning to end.
 `,
 
     4: `
 FORMS AND CRUD STAGE
 
-Add real user interaction.
+Implement complete user interaction.
 
-Every important action (Add, Edit, Delete, Save, Cancel) must:
+Every important action must:
 - Have a real event listener
-- Validate input
-- Update the data model
-- Save to localStorage
+- Read the user's input
+- Validate the input
+- Update application state
+- Save appropriate data
 - Re-render the affected UI
-- Show success/error feedback
+- Give success or error feedback
 
-Buttons that only look clickable are forbidden.
+Implement real:
+- Add
+- Edit
+- Delete
+- Save
+- Cancel
+- Search
+- Select
+- Submit
+- Confirm actions
+
+Buttons that only show an alert or console.log instead of performing the requested operation are forbidden.
 `,
 
     5: `
 BUSINESS LOGIC STAGE
 
-Implement real calculations and rules:
-- Totals, subtotals, discounts, stock, status changes, search, filter, sort, dashboard stats, reports, cart, etc.
+Implement the actual business rules of the requested application.
 
-All numbers and status must come from the live data and update when data changes.
+All calculations and status values must come from live application data.
+
+Examples include:
+- Totals
+- Subtotals
+- Sales
+- Stock changes
+- Low-stock rules
+- Search
+- Filtering
+- Sorting
+- Reports
+- Cart calculations
+- Status changes
+- Dashboard statistics
+- Relationships between records
+
+When one piece of data changes, every dependent part of the application must update.
+
+For example, if the application records a sale, inventory must actually decrease and dashboard totals must update.
 `,
 
     6: `
-UX AND MOBILE STAGE
+FINAL FUNCTIONAL QA + MOBILE STAGE
 
-Improve real usability:
-- Fully responsive layout
-- Mobile navigation that works
-- Empty states, loading states, notifications
-- Confirmation for destructive actions
-- Better forms and tables on small screens
-- Active navigation state
+This is the final build stage.
 
-Do not redesign into a different product.
+DO NOT create a new design.
+
+Thoroughly inspect the existing application and repair it.
+
+Verify ALL of the following:
+
+- Navigation works
+- Mobile navigation works
+- Every important button has a working event listener
+- Forms work
+- Add works
+- Edit works
+- Delete works
+- Search works
+- Business calculations work
+- Data updates correctly
+- localStorage saves data
+- localStorage restores data after refresh
+- Dependent dashboard values update
+- No important JavaScript errors remain
+- No missing DOM selectors remain
+- No dead buttons remain
+- No fake placeholder interactions remain
+- Empty states work
+- Confirmation dialogs work where appropriate
+- Responsive layout works on mobile
+- Existing working features are preserved
+
+The final index.html must be a complete, self-contained, directly runnable browser application.
+
+This is a FUNCTIONAL application test, not a visual design test.
 `,
 
     7: `
-INTEGRATION STAGE
+INTEGRATION REPAIR STAGE
 
-Make everything work together as one coherent application.
+If this stage is reached, treat the existing application as a production candidate.
 
-Verify and fix:
+Do not redesign it.
+
+Test the entire application flow from start to finish.
+
+Repair:
 - Navigation
-- Forms → data → re-render
-- Persistence
-- Search/filter
+- Data flow
+- Forms
+- CRUD
+- localStorage
 - Calculations
-- Status updates
-- Modals
-- Mobile menu
-- No broken features from earlier stages
+- Search
+- Filtering
+- Business rules
+- UI refresh
+- Mobile behavior
+- JavaScript errors
+
+Make sure features work together instead of working only in isolation.
 `,
 
     8: `
-FINAL QA AND REPAIR STAGE
+FINAL PRODUCTION QA STAGE
 
-This is the final production pass.
+This is the final verification pass.
 
-Do NOT start a new design.
+Do not add unnecessary features.
 
-Thoroughly inspect and repair:
-- Broken or missing event handlers
-- Buttons that do nothing
-- Broken navigation
-- Broken forms / validation
-- Broken localStorage
-- Broken calculations
-- Missing DOM elements / wrong selectors
-- Data not syncing with UI
-- Mobile issues
-- Any JavaScript errors
+Inspect and repair the complete application.
 
-The final index.html must be a complete, self-contained, directly runnable browser application.
+The final application must:
+- Open directly as index.html
+- Work without React, Next.js, npm, or external packages
+- Work inside an iframe
+- Have working JavaScript
+- Have working navigation
+- Have working forms
+- Have working business logic
+- Preserve browser data when appropriate
+- Have no obvious dead buttons
+- Have no placeholder-only functionality
+- Be responsive on mobile
+- Preserve all previously completed functionality
+
+Return the complete repaired index.html.
 `,
   };
 
-  return instructions[stageNumber] || instructions[8];
+  return (
+    instructions[stageNumber] ||
+    instructions[6]
+  );
 }
 
 function buildSystemPrompt(stageNumber) {
   return `
 You are the production build engine for a universal AI application builder.
 
-Your only job is to produce a REAL FUNCTIONAL browser application using pure HTML + CSS + Vanilla JavaScript.
+Your job is to produce a REAL FUNCTIONAL browser application.
+
+You are NOT a UI mockup generator.
 
 ==================================================
-STRICT RULES
+STRICT TECHNOLOGY RULES
 ==================================================
 
-1. Build ONLY the current user's project.
-2. NEVER mention BOMBA AI unless the user explicitly asked for branding.
-3. Use ONLY:
+1. Build ONLY the current user's requested application.
+
+2. Use ONLY:
    - HTML
    - CSS
    - Vanilla JavaScript
-4. NO React, Vue, Next.js, npm, frameworks, or external dependencies.
-5. index.html is the single source of truth and must be completely self-contained.
-6. CSS and JavaScript must normally live inside index.html.
-7. The file must open and work correctly inside a browser iframe.
-8. Prefer a clean architecture inside the single file:
-   - Data layer (arrays + localStorage helpers)
-   - Render functions that build the UI from data
-   - Event binding functions
-   - Business logic functions
-9. Every important button/link must have a real working event handler that:
-   - Changes data
-   - Saves to localStorage (when appropriate)
-   - Re-renders the UI
-10. Do not create fake/demo-only buttons.
-11. Continue improving the SAME application. Never throw away working features.
-12. If an index.html already exists, return the full improved version of it.
-13. Use Nigerian Naira (₦) for money unless the user requested another currency.
-14. Make it fully responsive.
+
+3. Do NOT use:
+   - React
+   - Vue
+   - Svelte
+   - Next.js
+   - npm packages
+   - build tools
+   - external JavaScript frameworks
+
+4. index.html must be a complete self-contained HTML document.
+
+5. CSS should normally be inside index.html.
+
+6. JavaScript should normally be inside index.html.
+
+7. The application must run by opening index.html directly.
+
+8. The application must run inside a browser iframe.
+
+9. Do not depend on a server unless the user's request explicitly requires a server.
+
+10. For browser-only applications, use localStorage for persistence when appropriate.
 
 ==================================================
-CURRENT STAGE
+FUNCTIONAL APPLICATION RULES
 ==================================================
 
-You are on BUILD STAGE ${stageNumber}.
+1. Every important button MUST perform the requested action.
+
+2. Never create buttons that only:
+   - alert()
+   - console.log()
+   - change a decorative CSS class
+   - pretend an operation happened
+
+3. If a user asks to add something, implement real adding.
+
+4. If a user asks to edit something, implement real editing.
+
+5. If a user asks to delete something, implement real deletion.
+
+6. If a user asks to record a transaction, implement the transaction.
+
+7. If a transaction affects another part of the application, update that part too.
+
+8. If data should persist, save it to localStorage.
+
+9. On startup, load saved data from localStorage.
+
+10. After every important data change:
+    - update state
+    - save state
+    - render the affected UI
+
+11. Dashboard numbers must come from real application state.
+
+12. Search must actually filter the displayed records.
+
+13. Forms must validate input.
+
+14. Empty states must work.
+
+15. Error states must work.
+
+16. Mobile navigation must actually work.
+
+17. Do not leave unfinished placeholder functionality.
+
+==================================================
+ARCHITECTURE
+==================================================
+
+Prefer this structure inside index.html:
+
+1. Application state/data
+2. localStorage helpers
+3. Utility functions
+4. Render functions
+5. Navigation functions
+6. Form functions
+7. CRUD functions
+8. Business logic
+9. Event binding
+10. Initial application startup
+
+Keep the application coherent.
+
+Do not create disconnected screens.
+
+==================================================
+CURRENT BUILD STAGE
+==================================================
+
+Stage ${stageNumber}
 
 ${stageInstructions(stageNumber)}
 
 ==================================================
-OUTPUT FORMAT (VERY IMPORTANT)
+PRESERVE EXISTING APPLICATION
 ==================================================
 
-Return ONLY valid JSON in this exact shape:
+If an existing index.html is provided:
+
+- Continue the SAME application.
+- Preserve working features.
+- Improve the existing application.
+- Do not replace it with an unrelated demo.
+- Do not remove working functionality.
+- Do not return fragments.
+- Return the COMPLETE updated index.html.
+
+==================================================
+MONEY
+==================================================
+
+Use Nigerian Naira (₦) when money is required unless the user explicitly requests another currency.
+
+==================================================
+OUTPUT
+==================================================
+
+Return ONLY valid JSON:
 
 {
   "files": [
     {
       "path": "index.html",
-      "content": "the complete HTML document as a string"
+      "content": "complete HTML document"
     }
   ],
-  "summary": "short description of what was done in this stage"
+  "summary": "short description"
 }
 
-No markdown. No code fences. No explanation outside the JSON.
-The index.html content must be complete and runnable.
+No markdown.
+No code fences.
+No explanation outside JSON.
 `;
+}
+
+function validateGeneratedApplication(html) {
+  const content = String(html || "").trim();
+
+  if (!content) {
+    return {
+      valid: false,
+      reason: "index.html is empty.",
+    };
+  }
+
+  if (content.length < 400) {
+    return {
+      valid: false,
+      reason:
+        "index.html is too small to be a complete application.",
+    };
+  }
+
+  const lower = content.toLowerCase();
+
+  if (!lower.includes("<!doctype html") &&
+      !lower.includes("<html")) {
+    return {
+      valid: false,
+      reason:
+        "Generated index.html is not a complete HTML document.",
+    };
+  }
+
+  if (!lower.includes("<body")) {
+    return {
+      valid: false,
+      reason:
+        "Generated index.html does not contain a body.",
+    };
+  }
+
+  if (!lower.includes("<script")) {
+    return {
+      valid: false,
+      reason:
+        "Generated application does not contain JavaScript.",
+    };
+  }
+
+  if (
+    !lower.includes("addeventlistener") &&
+    !lower.includes("onclick")
+  ) {
+    return {
+      valid: false,
+      reason:
+        "Generated application does not appear to contain interactive event handling.",
+    };
+  }
+
+  return {
+    valid: true,
+    reason: "",
+  };
 }
 
 export async function POST(req) {
   try {
     if (!supabaseUrl || !supabaseAnonKey) {
       return NextResponse.json(
-        { error: "Supabase environment variables are not configured." },
+        {
+          error:
+            "Supabase environment variables are not configured.",
+        },
         { status: 500 }
       );
     }
 
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
-        { error: "OpenAI API key is not configured." },
+        {
+          error:
+            "OpenAI API key is not configured.",
+        },
         { status: 500 }
       );
     }
 
-    const authHeader = req.headers.get("authorization");
+    const authHeader =
+      req.headers.get("authorization");
 
     if (!authHeader) {
       return NextResponse.json(
-        { error: "Please log in before building." },
+        {
+          error:
+            "Please log in before building.",
+        },
         { status: 401 }
       );
     }
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: {
-          Authorization: authHeader,
+    const supabase = createClient(
+      supabaseUrl,
+      supabaseAnonKey,
+      {
+        global: {
+          headers: {
+            Authorization: authHeader,
+          },
         },
-      },
-    });
+      }
+    );
 
     const {
       data: { user },
@@ -295,7 +553,10 @@ export async function POST(req) {
 
     if (userError || !user) {
       return NextResponse.json(
-        { error: "Your login session could not be verified." },
+        {
+          error:
+            "Your login session could not be verified.",
+        },
         { status: 401 }
       );
     }
@@ -303,21 +564,31 @@ export async function POST(req) {
     const body = await req.json();
 
     const projectId =
-      typeof body?.projectId === "string" ? body.projectId.trim() : "";
+      typeof body?.projectId === "string"
+        ? body.projectId.trim()
+        : "";
+
     const originalRequest =
       typeof body?.originalRequest === "string"
         ? body.originalRequest.trim()
         : "";
+
     const plan = body?.plan;
 
     if (!projectId || !originalRequest || !plan) {
       return NextResponse.json(
-        { error: "Missing build data." },
+        {
+          error:
+            "Missing build data.",
+        },
         { status: 400 }
       );
     }
 
-    const { data: project, error: projectError } = await supabase
+    const {
+      data: project,
+      error: projectError,
+    } = await supabase
       .from("builder_projects")
       .select("*")
       .eq("id", projectId)
@@ -325,132 +596,260 @@ export async function POST(req) {
       .single();
 
     if (projectError || !project) {
-      console.error("Builder project lookup error:", projectError);
+      console.error(
+        "Builder project lookup error:",
+        projectError
+      );
+
       return NextResponse.json(
-        { error: "Project not found." },
+        {
+          error:
+            "Project not found.",
+        },
         { status: 404 }
       );
     }
 
-    const stages = Array.isArray(plan.buildStages) ? plan.buildStages : [];
-    const totalStages = stages.length > 0 ? stages.length : 8;
-    const currentStage = Number(project.current_stage || 0);
-    const nextStage = currentStage + 1;
+    const stages = Array.isArray(
+      plan.buildStages
+    )
+      ? plan.buildStages
+      : [];
+
+    /*
+     * Keep the plan's real stage count.
+     *
+     * Most plans currently contain 6 stages.
+     * Stage 6 now contains the complete functional
+     * QA pass, so the build can actually finish
+     * with a working application.
+     */
+    const totalStages =
+      stages.length > 0
+        ? stages.length
+        : 6;
+
+    const currentStage = Math.max(
+      0,
+      Number(project.current_stage || 0)
+    );
+
+    const nextStage =
+      currentStage + 1;
 
     if (nextStage > totalStages) {
       return NextResponse.json({
         success: true,
         project,
         stage: currentStage,
-        files: normalizeFiles(project.project_files),
+        files: normalizeFiles(
+          project.project_files
+        ),
         completed: true,
-        summary: "The application build is already complete.",
+        summary:
+          "The application build is already complete.",
       });
     }
 
-    const stage = stages[nextStage - 1] || {
-      name: `Build Stage ${nextStage}`,
-      description: "Continue building and improving the application.",
-    };
+    const stage =
+      stages[nextStage - 1] || {
+        name: `Build Stage ${nextStage}`,
+        description:
+          "Continue building and improving the application.",
+      };
 
-    const existingFiles = normalizeFiles(project.project_files);
-    const existingIndex = getIndexFile(existingFiles);
+    const existingFiles =
+      normalizeFiles(
+        project.project_files
+      );
+
+    const existingIndex =
+      getIndexFile(existingFiles);
 
     const fileList =
       existingFiles.length > 0
-        ? existingFiles.map((file) => `- ${file.path}`).join("\n")
+        ? existingFiles
+            .map(
+              (file) =>
+                `- ${file.path}`
+            )
+            .join("\n")
         : "No files have been generated yet.";
 
-    const previousApplicationState = existingIndex
-      ? `
+    const previousApplicationState =
+      existingIndex
+        ? `
 THE CURRENT MASTER APPLICATION IS index.html.
-You MUST improve this existing file. Do not replace it with a completely different application.
 
-Current index.html:
+You MUST improve this existing application.
+
+Do NOT replace it with an unrelated demo.
+
+Preserve working features.
+
+CURRENT index.html:
 ${existingIndex.content}
 `
-      : `
+        : `
 There is no existing index.html yet.
-Create the application foundation now.
+
+Create the complete application foundation now.
 `;
 
-    const systemPrompt = buildSystemPrompt(nextStage);
+    const systemPrompt =
+      buildSystemPrompt(
+        nextStage
+      );
 
     const userPrompt = `
 CURRENT USER APPLICATION REQUEST:
 ${originalRequest}
 
 ==================================================
-PROJECT PLAN:
-${JSON.stringify(plan, null, 2)}
+PROJECT PLAN
+==================================================
+
+${JSON.stringify(
+  plan,
+  null,
+  2
+)}
 
 ==================================================
-CURRENT BUILD STAGE:
+CURRENT BUILD STAGE
+==================================================
+
 Stage ${nextStage} of ${totalStages}
-Name: ${stage.name}
-Description: ${stage.description}
+
+Name:
+${stage.name}
+
+Description:
+${stage.description}
 
 ==================================================
-FILES CURRENTLY IN PROJECT:
+CURRENT PROJECT FILES
+==================================================
+
 ${fileList}
 
 ==================================================
-CURRENT APPLICATION STATE:
+CURRENT APPLICATION
+==================================================
+
 ${previousApplicationState}
 
 ==================================================
-CRITICAL INSTRUCTIONS FOR THIS STAGE:
+CRITICAL BUILD REQUIREMENTS
+==================================================
 
-- Continue the SAME application.
-- Preserve all working features from previous stages.
-- Return a COMPLETE updated index.html (not a fragment).
-- Every important interactive element must have real working JavaScript.
-- Prefer this internal structure inside the single HTML file:
-  1. Data + localStorage helpers
-  2. Render functions
-  3. Event binding
-  4. Business logic
+Continue the SAME application.
 
-Stage objective:
-${stageInstructions(nextStage)}
+Preserve working functionality.
+
+Return a COMPLETE updated index.html.
+
+The final application must be genuinely functional.
+
+Do not create visual-only buttons.
+
+Do not use fake interactions.
+
+Do not merely describe functionality.
+
+Actually implement the JavaScript required for the requested functionality.
+
+If the application needs browser persistence, implement localStorage.
+
+If the application has related data, make sure changes propagate correctly.
+
+If a sale changes inventory, inventory must actually change.
+
+If a product is deleted, it must actually disappear from the data.
+
+If a dashboard displays totals, those totals must be calculated from the live data.
+
+If a search field is requested, it must actually filter the records.
+
+If the application contains forms, the forms must actually submit and update state.
+
+==================================================
+STAGE OBJECTIVE
+==================================================
+
+${stageInstructions(
+  nextStage
+)}
 
 Return only the required JSON.
 `;
 
-    const response = await openai.chat.completions.create({
-      model: MODEL,
-      temperature: 0.12,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-    });
+    const response =
+      await openai.chat.completions.create(
+        {
+          model: MODEL,
+          temperature: 0.1,
+          response_format: {
+            type: "json_object",
+          },
+          messages: [
+            {
+              role: "system",
+              content: systemPrompt,
+            },
+            {
+              role: "user",
+              content: userPrompt,
+            },
+          ],
+        }
+      );
 
-    const content = response.choices?.[0]?.message?.content;
+    const content =
+      response.choices?.[0]?.message?.content;
 
     if (!content) {
       return NextResponse.json(
-        { error: "BOMBA AI could not generate this build stage." },
+        {
+          error:
+            "BOMBA AI could not generate this build stage.",
+        },
         { status: 500 }
       );
     }
 
     let result;
+
     try {
       result = JSON.parse(content);
     } catch (parseError) {
-      console.error("Builder JSON parse error:", parseError);
+      console.error(
+        "Builder JSON parse error:",
+        parseError
+      );
+
       return NextResponse.json(
-        { error: "BOMBA AI returned invalid build data." },
+        {
+          error:
+            "BOMBA AI returned invalid build data.",
+        },
         { status: 500 }
       );
     }
 
-    const generatedFiles = normalizeFiles(result?.files);
-    const generatedIndex = generatedFiles.find(
-      (file) => file.path.toLowerCase() === "index.html"
-    );
+    const generatedFiles =
+      normalizeFiles(
+        result?.files
+      );
+
+    const generatedIndex =
+      generatedFiles.find(
+        (file) =>
+          cleanFilePath(
+            file.path
+          ).toLowerCase() ===
+          "index.html"
+      );
 
     if (!generatedIndex) {
       return NextResponse.json(
@@ -462,40 +861,81 @@ Return only the required JSON.
       );
     }
 
-    if (generatedIndex.content.trim().length < 400) {
+    const validation =
+      validateGeneratedApplication(
+        generatedIndex.content
+      );
+
+    if (!validation.valid) {
+      console.error(
+        "Generated application validation failed:",
+        validation.reason
+      );
+
       return NextResponse.json(
         {
           error:
-            "The generated index.html is too small to be a valid application.",
+            `Generated application failed functional validation: ${validation.reason}`,
         },
         { status: 500 }
       );
     }
 
-    const files = mergeFiles(existingFiles, generatedFiles);
-    const finalIndex = getIndexFile(files);
+    const files =
+      mergeFiles(
+        existingFiles,
+        generatedFiles
+      );
+
+    const finalIndex =
+      getIndexFile(files);
 
     if (!finalIndex) {
       return NextResponse.json(
-        { error: "The final project does not contain index.html." },
+        {
+          error:
+            "The final project does not contain index.html.",
+        },
         { status: 500 }
       );
     }
 
-    const completed = nextStage >= totalStages;
+    const completed =
+      nextStage >= totalStages;
 
-    const { data: updated, error: updateError } = await supabase
+    const {
+      data: updated,
+      error: updateError,
+    } = await supabase
       .from("builder_projects")
       .update({
         project_name:
-          plan.projectName || project.project_name || "BOMBA Project",
-        build_plan: plan,
-        project_files: files,
-        current_stage: nextStage,
-        total_stages: totalStages,
-        status: completed ? "completed" : "building",
-        is_completed: completed,
-        is_paused: false,
+          plan.projectName ||
+          project.project_name ||
+          "BOMBA Project",
+
+        build_plan:
+          plan,
+
+        project_files:
+          files,
+
+        current_stage:
+          nextStage,
+
+        total_stages:
+          totalStages,
+
+        status:
+          completed
+            ? "completed"
+            : "building",
+
+        is_completed:
+          completed,
+
+        is_paused:
+          false,
       })
       .eq("id", projectId)
       .eq("owner_id", user.id)
@@ -503,25 +943,55 @@ Return only the required JSON.
       .single();
 
     if (updateError) {
-      console.error("Builder project update error:", updateError);
+      console.error(
+        "Builder project update error:",
+        updateError
+      );
+
       throw updateError;
     }
 
     return NextResponse.json({
       success: true,
+
       project: updated,
-      stage: nextStage,
+
+      stage: {
+        stageNumber: nextStage,
+        stageName:
+          stage.name ||
+          `Build Stage ${nextStage}`,
+        summary:
+          typeof result?.summary ===
+            "string" &&
+          result.summary.trim()
+            ? result.summary.trim()
+            : `Stage ${nextStage} completed successfully.`,
+      },
+
       files,
+
       completed,
+
       summary:
-        typeof result?.summary === "string" && result.summary.trim()
+        typeof result?.summary ===
+          "string" &&
+        result.summary.trim()
           ? result.summary.trim()
           : `Stage ${nextStage} completed successfully.`,
     });
   } catch (error) {
-    console.error("Builder build error:", error);
+    console.error(
+      "Builder build error:",
+      error
+    );
+
     return NextResponse.json(
-      { error: error?.message || "Build failed." },
+      {
+        error:
+          error?.message ||
+          "Build failed.",
+      },
       { status: 500 }
     );
   }
