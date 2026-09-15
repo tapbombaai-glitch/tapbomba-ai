@@ -2884,25 +2884,20 @@ export default function Home() {
                             "hidden",
                           width: "100%",
                         }}
-                      >
-                        <iframe
-                          title="BOMBA AI Project Preview"
-                          srcDoc={
-                            htmlFile.content
-                          }
-                          style={{
-                            width: "100%",
-                            minHeight:
-                              "650px",
-                            height: "75vh",
-                            border: "none",
-                            display:
-                              "block",
-                            background:
-                              "#ffffff",
-                          }}
-                          sandbox="allow-scripts allow-forms allow-modals"
-                        />
+                      <iframe
+  key={`${builderProject.id}-${builderProject.current_stage}-${htmlFile.content.length}`}
+  title="BOMBA AI Project Preview"
+  srcDoc={String(htmlFile.content)}
+  style={{
+    width: "100%",
+    minHeight: "650px",
+    height: "75vh",
+    border: "none",
+    display: "block",
+    background: "#ffffff",
+  }}
+  sandbox="allow-scripts allow-forms allow-modals"
+/>
                       </div>
                     );
                   })()
