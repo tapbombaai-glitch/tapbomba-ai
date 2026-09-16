@@ -691,95 +691,100 @@ export default function Home() {
   }
 
   function selectFeature(name) {
-    setMenuOpen(false);
+  setMenuOpen(false);
 
-    if (name === "Universal Builder") {
-      setActiveFeature("Universal Builder");
-      setError("");
-      setAskError("");
-      return;
-    }
-
-    if (name === "ASK BOMBA AI") {
-      setActiveFeature("ASK BOMBA AI");
-      setError("");
-      setAskError("");
-      return;
-    }
-
-    if (name === "Flyer") {
-      setActiveFeature("Flyer");
-      setError("");
-      return;
-    }
-
-    setError(
-      `${name} is coming next. We're building BOMBA AI one feature at a time.`
-    );
-  }
-
-  function resetBuilder() {
-    setBuilderProject(null);
-    setBuilderPlan(null);
-    setBuilderBuildLogs([]);
-    setBuilderBuildError("");
-    setBuilderBuildLoading(false);
-    setBuilderView("start");
-    setBuilderPrompt("");
-    setAskPrompt("");
-    setAskAnswer("");
-    setAskError("");
-    setCopyStatus("");
-    setError("");
-  }
-
-  function goHome() {
-    setMenuOpen(false);
-    setActiveFeature("Flyer");
-    setError("");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  function openFlyer() {
-    setMenuOpen(false);
-    setActiveFeature("Flyer");
-    setError("");
-    setTimeout(() => {
-      window.scrollTo({
-        top: document.body.scrollHeight,
-        behavior: "smooth",
-      });
-    }, 50);
-  }
-
-  function openBuilder() {
-    setMenuOpen(false);
+  if (name === "Universal Builder") {
     setActiveFeature("Universal Builder");
     setError("");
-    setTimeout(() => {
-      window.scrollTo({
-        top: document.body.scrollHeight,
-        behavior: "smooth",
-      });
-    }, 50);
-  }
-
-  function openAsk() {
-    setMenuOpen(false);
-    setActiveFeature("ASK BOMBA AI");
     setAskError("");
-    setTimeout(() => {
-      window.scrollTo({
-        top: document.body.scrollHeight,
-        behavior: "smooth",
-      });
-    }, 50);
+    return;
   }
 
-  function openAuth() {
-    setMenuOpen(false);
-    window.location.href = "/auth";
+  if (name === "ASK BOMBA AI") {
+    setActiveFeature("ASK BOMBA AI");
+    setError("");
+    setAskError("");
+    return;
   }
+
+  if (name === "Flyer") {
+    setActiveFeature("Flyer");
+    setError("");
+    return;
+  }
+
+  setError(
+    `${name} is coming next. We're building BOMBA AI one feature at a time.`
+  );
+}
+
+function resetBuilder() {
+  setBuilderProject(null);
+  setBuilderPlan(null);
+  setBuilderBuildLogs([]);
+  setBuilderBuildError("");
+  setBuilderBuildLoading(false);
+  setBuilderView("start");
+  setBuilderPrompt("");
+  setAskPrompt("");
+  setAskAnswer("");
+  setAskError("");
+  setCopyStatus("");
+  setError("");
+}
+
+function goHome() {
+  setMenuOpen(false);
+  setActiveFeature("Flyer");
+  setError("");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function openFlyer() {
+  setMenuOpen(false);
+  setActiveFeature("Flyer");
+  setError("");
+  setTimeout(() => {
+    window.scrollTo({
+      top: document.body.scrollHeight,
+      behavior: "smooth",
+    });
+  }, 50);
+}
+
+function openBuilder() {
+  setMenuOpen(false);
+  setActiveFeature("Universal Builder");
+  setError("");
+  setTimeout(() => {
+    window.scrollTo({
+      top: document.body.scrollHeight,
+      behavior: "smooth",
+    });
+  }, 50);
+}
+
+function openProjects() {
+  setMenuOpen(false);
+  window.location.href = "/projects";
+}
+
+function openAsk() {
+  setMenuOpen(false);
+  setActiveFeature("ASK BOMBA AI");
+  setAskError("");
+  setTimeout(() => {
+    window.scrollTo({
+      top: document.body.scrollHeight,
+      behavior: "smooth",
+    });
+  }, 50);
+}
+
+function openAuth() {
+  setMenuOpen(false);
+  window.location.href = "/auth";
+}
 
   return (
     <main style={styles.page}>
