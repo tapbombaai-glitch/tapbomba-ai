@@ -17,18 +17,15 @@ export default function ProjectsPage() {
     setError("");
 
     try {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-      if (!supabaseUrl || !supabaseAnonKey) {
-        throw new Error("Supabase is not configured.");
-      }
-
-      const { createClient } = await import("@supabase/supabase-js");
+      // Supabase is loaded only in the browser.
+      // This avoids the previous "process is not defined" problem.
+      const { createClient } = await import(
+        "@supabase/supabase-js"
+      );
 
       const supabase = createClient(
-        supabaseUrl,
-        supabaseAnonKey
+        "https://gsfznvyYOUR-SUPABASE-DOMAIN.supabase.co",
+        "YOUR-SUPABASE-ANON-KEY"
       );
 
       const {
@@ -37,23 +34,31 @@ export default function ProjectsPage() {
       } = await supabase.auth.getSession();
 
       if (sessionError || !session) {
-        throw new Error("Please log in to view your projects.");
+        throw new Error(
+          "Please log in to view your projects."
+        );
       }
 
-      const { data, error: projectsError } = await supabase
-        .from("builder_projects")
-        .select("*")
-        .eq("owner_id", session.user.id)
-        .order("created_at", { ascending: false });
+      const response = await fetch(
+        "/api/builder/projects/list",
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
 
-      if (projectsError) {
+      const result = await response.json();
+
+      if (!response.ok) {
         throw new Error(
-          projectsError.message ||
+          result?.error ||
             "BOMBA AI could not load your projects."
         );
       }
 
-      setProjects(data || []);
+      setProjects(result?.projects || []);
     } catch (err) {
       console.error("My Projects error:", err);
 
@@ -119,8 +124,7 @@ export default function ProjectsPage() {
         background: "#050505",
         color: "#fff",
         padding: "20px",
-        fontFamily:
-          "Arial, Helvetica, sans-serif",
+        fontFamily: "Arial, Helvetica, sans-serif",
       }}
     >
       <div
@@ -253,269 +257,259 @@ export default function ProjectsPage() {
           </div>
         )}
 
-        {!loading && !error && projects.length === 0 && (
-          <div
-            style={{
-              padding: 30,
-              borderRadius: 18,
-              background: "#111",
-              border: "1px solid #292929",
-              textAlign: "center",
-            }}
-          >
+        {!loading &&
+          !error &&
+          projects.length === 0 && (
             <div
               style={{
-                fontSize: 48,
-                marginBottom: 12,
+                padding: 30,
+                borderRadius: 18,
+                background: "#111",
+                border: "1px solid #292929",
+                textAlign: "center",
               }}
             >
-              📁
+              <div
+                style={{
+                  fontSize: 48,
+                  marginBottom: 12,
+                }}
+              >
+                📁
+              </div>
+
+              <h2
+                style={{
+                  margin: "0 0 8px",
+                }}
+              >
+                No projects yet
+              </h2>
+
+              <p
+                style={{
+                  color: "#999",
+                  lineHeight: 1.5,
+                }}
+              >
+                Your saved Universal Builder projects
+                will appear here automatically.
+              </p>
+
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href = "/";
+                }}
+                style={{
+                  marginTop: 10,
+                  background: BRAND.accent,
+                  color: "#000",
+                  border: "none",
+                  padding: "13px 20px",
+                  borderRadius: 10,
+                  fontWeight: 800,
+                  cursor: "pointer",
+                }}
+              >
+                🚀 BUILD A PROJECT
+              </button>
             </div>
+          )}
 
-            <h2
+        {!loading &&
+          !error &&
+          projects.length > 0 && (
+            <div
               style={{
-                margin: "0 0 8px",
+                display: "grid",
+                gap: 16,
               }}
             >
-              No projects yet
-            </h2>
+              {projects.map((project) => {
+                const progress = getProgress(project);
+                const status = getStatus(project);
 
-            <p
-              style={{
-                color: "#999",
-                lineHeight: 1.5,
-              }}
-            >
-              Your saved Universal Builder projects
-              will appear here automatically.
-            </p>
-
-            <button
-              type="button"
-              onClick={() => {
-                window.location.href = "/";
-              }}
-              style={{
-                marginTop: 10,
-                background: BRAND.accent,
-                color: "#000",
-                border: "none",
-                padding: "13px 20px",
-                borderRadius: 10,
-                fontWeight: 800,
-                cursor: "pointer",
-              }}
-            >
-              🚀 BUILD A PROJECT
-            </button>
-          </div>
-        )}
-
-        {!loading && !error && projects.length > 0 && (
-          <div
-            style={{
-              display: "grid",
-              gap: 16,
-            }}
-          >
-            {projects.map((project) => {
-              const progress = getProgress(project);
-              const status = getStatus(project);
-
-              return (
-                <div
-                  key={project.id}
-                  style={{
-                    background: "#101010",
-                    border: "1px solid #292929",
-                    borderRadius: 18,
-                    padding: 20,
-                  }}
-                >
+                return (
                   <div
+                    key={project.id}
                     style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "flex-start",
-                      gap: 12,
+                      background: "#101010",
+                      border: "1px solid #292929",
+                      borderRadius: 18,
+                      padding: 20,
                     }}
                   >
-                    <div>
-                      <div
-                        style={{
-                          color: BRAND.accent,
-                          fontSize: 11,
-                          fontWeight: 800,
-                          letterSpacing: 1,
-                        }}
-                      >
-                        PROJECT
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        gap: 12,
+                      }}
+                    >
+                      <div>
+                        <div
+                          style={{
+                            color: BRAND.accent,
+                            fontSize: 11,
+                            fontWeight: 800,
+                            letterSpacing: 1,
+                          }}
+                        >
+                          PROJECT
+                        </div>
+
+                        <h2
+                          style={{
+                            margin: "6px 0 8px",
+                            fontSize: 21,
+                          }}
+                        >
+                          {project.project_name ||
+                            "New BOMBA Project"}
+                        </h2>
                       </div>
 
-                      <h2
+                      <div
                         style={{
-                          margin:
-                            "6px 0 8px",
-                          fontSize: 21,
+                          padding: "7px 10px",
+                          borderRadius: 999,
+                          background: "#191919",
+                          border: "1px solid #333",
+                          color:
+                            status === "COMPLETED"
+                              ? BRAND.accent
+                              : "#ddd",
+                          fontSize: 10,
+                          fontWeight: 800,
+                          whiteSpace: "nowrap",
                         }}
                       >
-                        {project.project_name ||
-                          "New BOMBA Project"}
-                      </h2>
+                        {status}
+                      </div>
                     </div>
 
                     <div
-                      style={{
-                        padding: "7px 10px",
-                        borderRadius: 999,
-                        background: "#191919",
-                        border:
-                          "1px solid #333",
-                        color:
-                          status ===
-                          "COMPLETED"
-                            ? BRAND.accent
-                            : "#ddd",
-                        fontSize: 10,
-                        fontWeight: 800,
-                        whiteSpace:
-                          "nowrap",
-                      }}
-                    >
-                      {status}
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      color: "#aaa",
-                      lineHeight: 1.5,
-                      fontSize: 14,
-                      marginBottom: 16,
-                    }}
-                  >
-                    {project.original_request ||
-                      "No project description available."}
-                  </div>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent:
-                        "space-between",
-                      marginBottom: 8,
-                      fontSize: 13,
-                    }}
-                  >
-                    <span
                       style={{
                         color: "#aaa",
+                        lineHeight: 1.5,
+                        fontSize: 14,
+                        marginBottom: 16,
                       }}
                     >
-                      Build progress
-                    </span>
+                      {project.original_request ||
+                        "No project description available."}
+                    </div>
 
-                    <strong>
-                      {progress}%
-                    </strong>
-                  </div>
-
-                  <div
-                    style={{
-                      height: 8,
-                      background: "#222",
-                      borderRadius: 999,
-                      overflow: "hidden",
-                      marginBottom: 18,
-                    }}
-                  >
                     <div
                       style={{
-                        height: "100%",
-                        width: `${progress}%`,
-                        background:
-                          BRAND.accent,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        marginBottom: 8,
+                        fontSize: 13,
+                      }}
+                    >
+                      <span
+                        style={{
+                          color: "#aaa",
+                        }}
+                      >
+                        Build progress
+                      </span>
+
+                      <strong>{progress}%</strong>
+                    </div>
+
+                    <div
+                      style={{
+                        height: 8,
+                        background: "#222",
                         borderRadius: 999,
+                        overflow: "hidden",
+                        marginBottom: 18,
                       }}
-                    />
+                    >
+                      <div
+                        style={{
+                          height: "100%",
+                          width: `${progress}%`,
+                          background: BRAND.accent,
+                          borderRadius: 999,
+                        }}
+                      />
+                    </div>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: 10,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openProject(project)
+                        }
+                        style={{
+                          background: BRAND.accent,
+                          color: "#000",
+                          border: "none",
+                          padding: "11px 16px",
+                          borderRadius: 10,
+                          fontWeight: 800,
+                          cursor: "pointer",
+                        }}
+                      >
+                        📂 OPEN
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          alert(
+                            "Preview will be connected next."
+                          )
+                        }
+                        style={{
+                          background: "#191919",
+                          color: "#fff",
+                          border: "1px solid #333",
+                          padding: "11px 16px",
+                          borderRadius: 10,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                        }}
+                      >
+                        👁️ PREVIEW
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          alert(
+                            "Files & Code will be connected next."
+                          )
+                        }
+                        style={{
+                          background: "#191919",
+                          color: "#fff",
+                          border: "1px solid #333",
+                          padding: "11px 16px",
+                          borderRadius: 10,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                        }}
+                      >
+                        💻 FILES & CODE
+                      </button>
+                    </div>
                   </div>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: 10,
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() =>
-                        openProject(project)
-                      }
-                      style={{
-                        background:
-                          BRAND.accent,
-                        color: "#000",
-                        border: "none",
-                        padding:
-                          "11px 16px",
-                        borderRadius: 10,
-                        fontWeight: 800,
-                        cursor: "pointer",
-                      }}
-                    >
-                      📂 OPEN
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        alert(
-                          "Preview will be connected next."
-                        )
-                      }
-                      style={{
-                        background: "#191919",
-                        color: "#fff",
-                        border:
-                          "1px solid #333",
-                        padding:
-                          "11px 16px",
-                        borderRadius: 10,
-                        fontWeight: 700,
-                        cursor: "pointer",
-                      }}
-                    >
-                      👁️ PREVIEW
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        alert(
-                          "Files & Code will be connected next."
-                        )
-                      }
-                      style={{
-                        background: "#191919",
-                        color: "#fff",
-                        border:
-                          "1px solid #333",
-                        padding:
-                          "11px 16px",
-                        borderRadius: 10,
-                        fontWeight: 700,
-                        cursor: "pointer",
-                      }}
-                    >
-                      💻 FILES & CODE
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          )}
       </div>
     </main>
   );
