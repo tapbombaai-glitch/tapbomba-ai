@@ -830,7 +830,7 @@ function openAuth() {
 
             <div style={styles.menuDivider}></div>
 
-            <button type="button" style={styles.menuItem} onClick={goHome}>
+                        <button type="button" style={styles.menuItem} onClick={goHome}>
               <span style={styles.menuIcon}>🏠</span>
               <span>Home</span>
             </button>
@@ -843,6 +843,15 @@ function openAuth() {
             <button type="button" style={styles.menuItem} onClick={openBuilder}>
               <span style={styles.menuIcon}>🛠️</span>
               <span>Universal Builder</span>
+            </button>
+
+            <button
+              type="button"
+              style={styles.menuItem}
+              onClick={openProjects}
+            >
+              <span style={styles.menuIcon}>📁</span>
+              <span>My Projects</span>
             </button>
 
             <button type="button" style={styles.menuItem} onClick={openAsk}>
