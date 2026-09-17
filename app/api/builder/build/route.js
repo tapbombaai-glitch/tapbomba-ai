@@ -524,8 +524,7 @@ export async function POST(req) {
     if (!authHeader) {
       return NextResponse.json(
         {
-          error:
-            "Please log in before building.",
+          error: "Please log in before building.",
         },
         { status: 401 }
       );
@@ -575,8 +574,7 @@ export async function POST(req) {
     if (!projectId || !originalRequest || !plan) {
       return NextResponse.json(
         {
-          error:
-            "Missing build data.",
+          error: "Missing build data.",
         },
         { status: 400 }
       );
@@ -600,8 +598,7 @@ export async function POST(req) {
 
       return NextResponse.json(
         {
-          error:
-            "Project not found.",
+          error: "Project not found.",
         },
         { status: 404 }
       );
@@ -612,17 +609,14 @@ export async function POST(req) {
       : [];
 
     const totalStages =
-      stages.length > 0
-        ? stages.length
-        : 6;
+      stages.length > 0 ? stages.length : 6;
 
     const currentStage = Math.max(
       0,
       Number(project.current_stage || 0)
     );
 
-    const nextStage =
-      currentStage + 1;
+    const nextStage = currentStage + 1;
 
     if (nextStage > totalStages) {
       return NextResponse.json({
@@ -646,9 +640,7 @@ export async function POST(req) {
       };
 
     const existingFiles =
-      normalizeFiles(
-        project.project_files
-      );
+      normalizeFiles(project.project_files);
 
     const existingIndex =
       getIndexFile(existingFiles);
@@ -657,8 +649,7 @@ export async function POST(req) {
       existingFiles.length > 0
         ? existingFiles
             .map(
-              (file) =>
-                `- ${file.path}`
+              (file) => `- ${file.path}`
             )
             .join("\n")
         : "No files have been generated yet.";
@@ -684,9 +675,7 @@ Create the complete application foundation now.
 `;
 
     const systemPrompt =
-      buildSystemPrompt(
-        nextStage
-      );
+      buildSystemPrompt(nextStage);
 
     const userPrompt = `
 CURRENT USER APPLICATION REQUEST:
@@ -696,11 +685,7 @@ ${originalRequest}
 PROJECT PLAN
 ==================================================
 
-${JSON.stringify(
-  plan,
-  null,
-  2
-)}
+${JSON.stringify(plan, null, 2)}
 
 ==================================================
 CURRENT BUILD STAGE
@@ -764,9 +749,7 @@ If the application contains forms, the forms must actually submit and update sta
 STAGE OBJECTIVE
 ==================================================
 
-${stageInstructions(
-  nextStage
-)}
+${stageInstructions(nextStage)}
 
 Return only the required JSON.
 `;
@@ -823,16 +806,12 @@ Return only the required JSON.
     }
 
     const generatedFiles =
-      normalizeFiles(
-        result?.files
-      );
+      normalizeFiles(result?.files);
 
     const generatedIndex =
       generatedFiles.find(
         (file) =>
-          cleanFilePath(
-            file.path
-          ).toLowerCase() ===
+          cleanFilePath(file.path).toLowerCase() ===
           "index.html"
       );
 
@@ -867,10 +846,12 @@ Return only the required JSON.
     }
 
     // ==========================================
-    // AI DOCTOR — DIAGNOSIS ONLY
+    // AI DOCTOR — AUTOMATIC DIAGNOSIS + REPAIR
     // ==========================================
 
+    let doctorResult = null;
     let doctorDiagnosis = null;
+    let repairedCode = generatedIndex.content;
 
     try {
       const doctorResponse = await fetch(
@@ -884,92 +865,131 @@ Return only the required JSON.
             code: generatedIndex.content,
             filename: generatedIndex.path,
             language: "html",
+            mode: "auto-repair",
             userMessage:
-              "Diagnose this generated application before the Builder saves this stage. Do not repair it.",
+              "Automatically diagnose, repair, and verify this generated application. Repair blocking problems instead of cancelling the build. Preserve all working functionality and return the verified repaired application.",
           }),
         }
       );
 
-      const doctorResult =
+      doctorResult =
         await doctorResponse.json();
 
-      if (!doctorResponse.ok || !doctorResult?.success) {
+      if (!doctorResponse.ok) {
         console.error(
-          "AI Doctor diagnosis failed:",
+          "AI Doctor automatic repair failed:",
           doctorResult
-        );
-
-        return NextResponse.json(
-          {
-            error:
-              "AI Doctor could not complete the diagnosis. The build stage was not saved.",
-            doctor: doctorResult,
-          },
-          { status: 500 }
-        );
-      }
-
-      doctorDiagnosis =
-        doctorResult.diagnosis || null;
-
-      const doctorErrors =
-        Array.isArray(
-          doctorDiagnosis?.errors
-        )
-          ? doctorDiagnosis.errors
-          : [];
-
-      const blockingErrors =
-        doctorErrors.filter(
-          (error) =>
-            ["high", "critical"].includes(
-              String(
-                error?.severity || ""
-              ).toLowerCase()
-            )
-        );
-
-      if (blockingErrors.length > 0) {
-        console.error(
-          "AI Doctor found blocking errors:",
-          blockingErrors
         );
 
         return NextResponse.json(
           {
             success: false,
             error:
-              "AI Doctor found blocking problems in the generated application. The build stage was not saved.",
-            doctor: doctorDiagnosis,
-            stage: {
-              stageNumber: nextStage,
-              stageName:
-                stage.name ||
-                `Build Stage ${nextStage}`,
-            },
+              doctorResult?.error ||
+              "AI Doctor could not automatically repair and verify the generated application. The build stage was not saved.",
+            doctor: doctorResult,
+          },
+          {
+            status:
+              doctorResponse.status || 500,
+          }
+        );
+      }
+
+      if (!doctorResult?.success) {
+        console.error(
+          "AI Doctor returned an unsuccessful repair result:",
+          doctorResult
+        );
+
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              doctorResult?.error ||
+              "AI Doctor could not complete automatic repair and verification. The build stage was not saved.",
+            doctor: doctorResult,
+          },
+          { status: 422 }
+        );
+      }
+
+      doctorDiagnosis =
+        doctorResult?.diagnosis || null;
+
+      const returnedCode =
+        typeof doctorResult?.repairedCode ===
+          "string" &&
+        doctorResult.repairedCode.trim()
+          ? doctorResult.repairedCode
+          : typeof doctorResult?.code ===
+              "string" &&
+            doctorResult.code.trim()
+          ? doctorResult.code
+          : generatedIndex.content;
+
+      repairedCode = returnedCode;
+
+      const repairedValidation =
+        validateGeneratedApplication(
+          repairedCode
+        );
+
+      if (!repairedValidation.valid) {
+        console.error(
+          "AI Doctor returned invalid repaired application:",
+          repairedValidation.reason
+        );
+
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              `AI Doctor returned a repaired application that failed validation: ${repairedValidation.reason}`,
+            doctor: doctorResult,
           },
           { status: 422 }
         );
       }
     } catch (doctorError) {
       console.error(
-        "AI Doctor connection error:",
+        "AI Doctor automatic repair connection error:",
         doctorError
       );
 
       return NextResponse.json(
         {
+          success: false,
           error:
-            "AI Doctor could not be reached. The build stage was not saved.",
+            "AI Doctor could not be reached for automatic repair. The build stage was not saved.",
         },
         { status: 500 }
       );
     }
 
+    // ==========================================
+    // USE THE VERIFIED DOCTOR VERSION
+    // ==========================================
+
+    const finalGeneratedFiles =
+      generatedFiles.map((file) => {
+        if (
+          cleanFilePath(file.path).toLowerCase() ===
+          "index.html"
+        ) {
+          return {
+            ...file,
+            content: repairedCode,
+          };
+        }
+
+        return file;
+      });
+
     const files =
       mergeFiles(
         existingFiles,
-        generatedFiles
+        finalGeneratedFiles
       );
 
     const finalIndex =
@@ -982,6 +1002,23 @@ Return only the required JSON.
             "The final project does not contain index.html.",
         },
         { status: 500 }
+      );
+    }
+
+    const finalValidation =
+      validateGeneratedApplication(
+        finalIndex.content
+      );
+
+    if (!finalValidation.valid) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            `Final application validation failed: ${finalValidation.reason}`,
+          doctor: doctorResult,
+        },
+        { status: 422 }
       );
     }
 
@@ -999,28 +1036,22 @@ Return only the required JSON.
           project.project_name ||
           "BOMBA Project",
 
-        build_plan:
-          plan,
+        build_plan: plan,
 
-        project_files:
-          files,
+        project_files: files,
 
-        current_stage:
-          nextStage,
+        current_stage: nextStage,
 
-        total_stages:
-          totalStages,
+        total_stages: totalStages,
 
         status:
           completed
             ? "completed"
             : "building",
 
-        is_completed:
-          completed,
+        is_completed: completed,
 
-        is_paused:
-          false,
+        is_paused: false,
       })
       .eq("id", projectId)
       .eq("owner_id", user.id)
@@ -1036,12 +1067,18 @@ Return only the required JSON.
       throw updateError;
     }
 
+    const repairSummary =
+      doctorResult?.repair?.summary ||
+      doctorResult?.repairSummary ||
+      doctorResult?.verification?.summary ||
+      "AI Doctor automatically checked and repaired the generated application.";
+
     return NextResponse.json({
       success: true,
 
       project: updated,
 
-      doctor: doctorDiagnosis,
+      doctor: doctorResult,
 
       stage: {
         stageNumber: nextStage,
@@ -1053,19 +1090,23 @@ Return only the required JSON.
             "string" &&
           result.summary.trim()
             ? result.summary.trim()
-            : `Stage ${nextStage} completed successfully.`,
+            : `Stage ${nextStage} completed successfully. AI Doctor automatically checked and repaired the application.`,
       },
 
       files,
 
       completed,
 
+      automaticRepair: true,
+
+      repairSummary,
+
       summary:
         typeof result?.summary ===
           "string" &&
         result.summary.trim()
-          ? result.summary.trim()
-          : `Stage ${nextStage} completed successfully.`,
+          ? `${result.summary.trim()} AI Doctor automatically checked, repaired, and verified the application.`
+          : `Stage ${nextStage} completed successfully. AI Doctor automatically checked, repaired, and verified the application.`,
     });
   } catch (error) {
     console.error(
