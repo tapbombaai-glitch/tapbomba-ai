@@ -2,39 +2,40 @@ import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
 export async function GET(request) {
   try {
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return Response.json(
+        {
+          success: false,
+          error: "Supabase environment variables are not configured.",
+        },
+        { status: 500 }
+      );
+    }
+
     const authHeader = request.headers.get("authorization");
 
     if (!authHeader) {
       return Response.json(
         {
           success: false,
-          error: "Missing authorization.",
-        },
-        { status: 401 }
-      );
-    }
-
-    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-
-    if (!token) {
-      return Response.json(
-        {
-          success: false,
-          error: "Missing access token.",
+          error: "Please log in before viewing your projects.",
         },
         { status: 401 }
       );
     }
 
     const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      supabaseUrl,
+      supabaseAnonKey,
       {
         global: {
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: authHeader,
           },
         },
       }
@@ -43,13 +44,13 @@ export async function GET(request) {
     const {
       data: { user },
       error: userError,
-    } = await supabase.auth.getUser(token);
+    } = await supabase.auth.getUser();
 
     if (userError || !user) {
       return Response.json(
         {
           success: false,
-          error: "Your session is invalid or has expired.",
+          error: "Your login session could not be verified.",
         },
         { status: 401 }
       );
@@ -58,7 +59,7 @@ export async function GET(request) {
     const { data, error } = await supabase
       .from("builder_projects")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("owner_id", user.id)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -67,7 +68,9 @@ export async function GET(request) {
       return Response.json(
         {
           success: false,
-          error: error.message,
+          error:
+            error.message ||
+            "Could not load your projects.",
         },
         { status: 500 }
       );
