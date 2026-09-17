@@ -1550,19 +1550,19 @@ function openAuth() {
                       }}
                     >
                       <iframe
-                        key={`\( {builderProject.id}- \){builderProject.current_stage}-${htmlFile.content.length}`}
-                        title="BOMBA AI Project Preview"
-                        srcDoc={String(htmlFile.content)}
-                        style={{
-                          width: "100%",
-                          minHeight: "650px",
-                          height: "75vh",
-                          border: "none",
-                          display: "block",
-                          background: "#ffffff",
-                        }}
-                        sandbox="allow-scripts allow-forms allow-modals"
-                      />
+  key={`${builderProject.id}-${builderProject.current_stage}-${htmlFile.content.length}`}
+  title="BOMBA AI Project Preview"
+  srcDoc={String(htmlFile.content)}
+  style={{
+    width: "100%",
+    minHeight: "650px",
+    height: "75vh",
+    border: "none",
+    display: "block",
+    background: "#ffffff",
+  }}
+  sandbox="allow-scripts allow-forms allow-modals"
+/>
                     </div>
                   );
                 })()
