@@ -61,8 +61,7 @@ function mergeFiles(existingFiles, generatedFiles) {
 function getIndexFile(files) {
   return files.find(
     (file) =>
-      cleanFilePath(file.path).toLowerCase() ===
-      "index.html"
+      cleanFilePath(file.path).toLowerCase() === "index.html"
   );
 }
 
@@ -273,10 +272,7 @@ Return the complete repaired index.html.
 `,
   };
 
-  return (
-    instructions[stageNumber] ||
-    instructions[6]
-  );
+  return instructions[stageNumber] || instructions[6];
 }
 
 function buildSystemPrompt(stageNumber) {
@@ -457,8 +453,10 @@ function validateGeneratedApplication(html) {
 
   const lower = content.toLowerCase();
 
-  if (!lower.includes("<!doctype html") &&
-      !lower.includes("<html")) {
+  if (
+    !lower.includes("<!doctype html") &&
+    !lower.includes("<html")
+  ) {
     return {
       valid: false,
       reason:
@@ -521,8 +519,7 @@ export async function POST(req) {
       );
     }
 
-    const authHeader =
-      req.headers.get("authorization");
+    const authHeader = req.headers.get("authorization");
 
     if (!authHeader) {
       return NextResponse.json(
@@ -610,20 +607,10 @@ export async function POST(req) {
       );
     }
 
-    const stages = Array.isArray(
-      plan.buildStages
-    )
+    const stages = Array.isArray(plan.buildStages)
       ? plan.buildStages
       : [];
 
-    /*
-     * Keep the plan's real stage count.
-     *
-     * Most plans currently contain 6 stages.
-     * Stage 6 now contains the complete functional
-     * QA pass, so the build can actually finish
-     * with a working application.
-     */
     const totalStages =
       stages.length > 0
         ? stages.length
@@ -785,25 +772,23 @@ Return only the required JSON.
 `;
 
     const response =
-      await openai.chat.completions.create(
-        {
-          model: MODEL,
-          temperature: 0.1,
-          response_format: {
-            type: "json_object",
+      await openai.chat.completions.create({
+        model: MODEL,
+        temperature: 0.1,
+        response_format: {
+          type: "json_object",
+        },
+        messages: [
+          {
+            role: "system",
+            content: systemPrompt,
           },
-          messages: [
-            {
-              role: "system",
-              content: systemPrompt,
-            },
-            {
-              role: "user",
-              content: userPrompt,
-            },
-          ],
-        }
-      );
+          {
+            role: "user",
+            content: userPrompt,
+          },
+        ],
+      });
 
     const content =
       response.choices?.[0]?.message?.content;
@@ -876,6 +861,106 @@ Return only the required JSON.
         {
           error:
             `Generated application failed functional validation: ${validation.reason}`,
+        },
+        { status: 500 }
+      );
+    }
+
+    // ==========================================
+    // AI DOCTOR — DIAGNOSIS ONLY
+    // ==========================================
+
+    let doctorDiagnosis = null;
+
+    try {
+      const doctorResponse = await fetch(
+        new URL("/api/doctor", req.url),
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            code: generatedIndex.content,
+            filename: generatedIndex.path,
+            language: "html",
+            userMessage:
+              "Diagnose this generated application before the Builder saves this stage. Do not repair it.",
+          }),
+        }
+      );
+
+      const doctorResult =
+        await doctorResponse.json();
+
+      if (!doctorResponse.ok || !doctorResult?.success) {
+        console.error(
+          "AI Doctor diagnosis failed:",
+          doctorResult
+        );
+
+        return NextResponse.json(
+          {
+            error:
+              "AI Doctor could not complete the diagnosis. The build stage was not saved.",
+            doctor: doctorResult,
+          },
+          { status: 500 }
+        );
+      }
+
+      doctorDiagnosis =
+        doctorResult.diagnosis || null;
+
+      const doctorErrors =
+        Array.isArray(
+          doctorDiagnosis?.errors
+        )
+          ? doctorDiagnosis.errors
+          : [];
+
+      const blockingErrors =
+        doctorErrors.filter(
+          (error) =>
+            ["high", "critical"].includes(
+              String(
+                error?.severity || ""
+              ).toLowerCase()
+            )
+        );
+
+      if (blockingErrors.length > 0) {
+        console.error(
+          "AI Doctor found blocking errors:",
+          blockingErrors
+        );
+
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "AI Doctor found blocking problems in the generated application. The build stage was not saved.",
+            doctor: doctorDiagnosis,
+            stage: {
+              stageNumber: nextStage,
+              stageName:
+                stage.name ||
+                `Build Stage ${nextStage}`,
+            },
+          },
+          { status: 422 }
+        );
+      }
+    } catch (doctorError) {
+      console.error(
+        "AI Doctor connection error:",
+        doctorError
+      );
+
+      return NextResponse.json(
+        {
+          error:
+            "AI Doctor could not be reached. The build stage was not saved.",
         },
         { status: 500 }
       );
@@ -955,6 +1040,8 @@ Return only the required JSON.
       success: true,
 
       project: updated,
+
+      doctor: doctorDiagnosis,
 
       stage: {
         stageNumber: nextStage,
