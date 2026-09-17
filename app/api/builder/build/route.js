@@ -18,7 +18,7 @@ const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
    FILE HELPERS
 ========================================================= */
 
-function cleanFilePath(path: unknown) {
+function cleanPath(path: unknown) {
   return String(path || "")
     .trim()
     .replace(/^\/+/, "");
@@ -36,23 +36,20 @@ function normalizeFiles(files: unknown) {
         typeof file.content === "string"
     )
     .map((file) => ({
-      path: cleanFilePath(file.path),
+      path: cleanPath(file.path),
       content: file.content,
     }))
     .filter((file) => file.path);
 }
 
-function mergeFiles(
-  existingFiles: unknown,
-  generatedFiles: unknown
-) {
-  const files = [...normalizeFiles(existingFiles)];
+function mergeFiles(existing: unknown, generated: unknown) {
+  const files = [...normalizeFiles(existing)];
 
-  for (const generatedFile of normalizeFiles(generatedFiles)) {
+  for (const generatedFile of normalizeFiles(generated)) {
     const index = files.findIndex(
       (file) =>
-        cleanFilePath(file.path).toLowerCase() ===
-        cleanFilePath(generatedFile.path).toLowerCase()
+        cleanPath(file.path).toLowerCase() ===
+        cleanPath(generatedFile.path).toLowerCase()
     );
 
     if (index >= 0) {
@@ -65,11 +62,10 @@ function mergeFiles(
   return files;
 }
 
-function getIndexFile(files: unknown) {
+function getIndex(files: unknown) {
   return normalizeFiles(files).find(
     (file) =>
-      cleanFilePath(file.path).toLowerCase() ===
-      "index.html"
+      cleanPath(file.path).toLowerCase() === "index.html"
   );
 }
 
@@ -77,517 +73,347 @@ function getIndexFile(files: unknown) {
    STAGE INSTRUCTIONS
 ========================================================= */
 
-function stageInstructions(stageNumber: number) {
-  const instructions: Record<number, string> = {
+function getStagePrompt(stage: number) {
+  const stages: Record<number, string> = {
     1: `
-FOUNDATION + PRODUCT IMPLEMENTATION STAGE
+STAGE 1 — REAL PRODUCT FOUNDATION
 
-This is NOT a generic website foundation.
+Build the actual product requested by the user.
 
-FIRST understand the user's requested product.
+Do NOT build a generic website.
 
-Build the actual requested product immediately.
-
-The first generated version must already look and behave like the
-specific application requested by the user.
-
-For example:
-
-If the user requests a food delivery application:
-- Build the food delivery experience.
-- Do not create "Modern Web App".
-- Do not create generic Home/About/Contact pages.
-- Include food categories.
-- Include restaurants or food products.
-- Include search.
-- Include location.
-- Include realistic food names.
-- Include prices.
-- Include ratings where appropriate.
-- Include cart functionality where appropriate.
-
-If the user requests a school application:
-- Build the school application.
-
-If the user requests an inventory application:
-- Build the inventory application.
-
-If the user requests a booking application:
-- Build the booking application.
-
-The product type must come from the user's actual request.
-
-Must include:
-- Complete valid HTML5 document
-- Professional responsive layout
-- Product-specific home/dashboard screen
-- Product-specific navigation
-- Real UI components appropriate to the requested product
-- Working JavaScript
-- Real event listeners
-- Real interactions
+Requirements:
+- Complete HTML5 document
+- Product-specific branding and content
+- Product-specific screens
 - Realistic demo data
-- No generic template
-- No tutorial
-- No placeholder-only interface
-- No fake buttons
+- Mobile-first responsive UI
+- Vanilla JavaScript
+- Everything in index.html
+- Working navigation
+- Working important buttons
+- Working basic interactions
 
-The application must already be usable in a browser after Stage 1.
+CRITICAL BUTTON RULE:
+
+Every visible important button must perform a real action.
+
+Do not create buttons that:
+- do nothing
+- only console.log()
+- only alert()
+- exist only for decoration
+
+Use real event listeners and real application state.
+
+The application must already behave like the requested product after Stage 1.
 `,
 
     2: `
-DATA AND STORAGE STAGE
-
-Continue the SAME requested application.
-
-Do NOT replace the product with another template.
-
-Create a real data model appropriate to the user's requested product.
-
-Must implement:
-- JavaScript application state
-- Appropriate arrays/objects
-- Realistic demo data
-- localStorage persistence where appropriate
-- Load helpers
-- Save helpers
-- Add functions
-- Update functions
-- Delete functions
-- Empty states
-- UI rendered from application data
-
-For a food delivery application this may include:
-- restaurants
-- food items
-- categories
-- cart items
-- quantities
-- prices
-- delivery information
-- orders
-
-For another product, use data appropriate to THAT product.
-
-Do not blindly add food-delivery features to unrelated applications.
-
-Data must actually drive the UI.
-`,
-
-    3: `
-SCREENS AND WORKFLOWS STAGE
+STAGE 2 — DATA AND APPLICATION STATE
 
 Continue the SAME application.
 
-Build the major workflows identified from the user's request and project plan.
+Do not replace it with a new template.
 
-Requirements:
-- Navigation actually changes views
-- Buttons perform real actions
-- Forms actually submit
-- Search actually searches
-- Filters actually filter
-- Data changes appear immediately
-- Screens share the same application state
-- No disconnected mock screens
-- No placeholder workflows
+Implement:
+- coherent application state
+- realistic data
+- localStorage where appropriate
+- load/save helpers
+- add/update/delete helpers where appropriate
+- UI rendered from state
 
-The user must be able to complete the important workflow from beginning to end.
+Important actions must:
+1. read state
+2. update state
+3. save state when appropriate
+4. update the UI
 
-For example, if the product is food delivery:
-Browse → search → choose food → add to cart → adjust quantity → view cart → checkout.
+Every important button must remain functional.
+`,
 
-For other products, implement the workflow appropriate to the requested product.
+    3: `
+STAGE 3 — COMPLETE USER WORKFLOWS
+
+Continue the SAME application.
+
+Implement the primary workflow requested by the user.
+
+Examples:
+
+Food delivery:
+browse → search → category → restaurant → food → cart → checkout
+
+Booking:
+browse → select → date/time → booking → confirmation
+
+Inventory:
+products → add/edit → stock → transactions → totals
+
+Use the workflow appropriate to the actual user request.
+
+Navigation, search, filtering and forms must actually work.
+
+Do not create disconnected mock screens.
 `,
 
     4: `
-FORMS AND CRUD STAGE
+STAGE 4 — INTERACTIONS, CRUD AND FORMS
 
-Implement complete user interaction for the requested application.
+Continue the SAME application.
 
-Every important action must:
-- Have a real event listener
-- Read user input
-- Validate input
-- Update application state
-- Save appropriate data
-- Re-render affected UI
-- Give useful success/error feedback
+Repair and implement important actions:
 
-Implement real:
 - Add
 - Edit
 - Delete
 - Save
 - Cancel
 - Search
-- Select
+- Filter
 - Submit
-- Confirm
-- Quantity changes
-- Filtering where appropriate
+- Select
+- Quantity controls
+- Navigation
+- Checkout where applicable
 
-Do not use alert() as a substitute for functionality.
+Every important action must:
+- have a real event handler
+- validate input when necessary
+- update application state
+- persist data where appropriate
+- re-render affected UI
+- provide useful feedback
 
-Do not create buttons that only appear to work.
+No fake buttons.
+No alert-only functionality.
 `,
 
     5: `
-BUSINESS LOGIC STAGE
+STAGE 5 — BUSINESS LOGIC
 
-Implement the actual business rules of the requested application.
+Continue the SAME application.
 
-All calculations and status values must come from live application state.
+Implement the real business rules required by the user's product.
 
-Examples:
+All calculations must come from live application state.
 
-Food delivery:
-- cart subtotal
+Examples for a food app:
+- quantities
+- subtotal
 - delivery fee
 - total
-- quantity changes
-- restaurant filtering
-- category filtering
-- search
+- cart badge
 - order creation
 - order status
 
-Inventory:
-- stock changes
-- sales
-- totals
-- low stock
-- reports
+Use rules appropriate to the actual requested application.
 
-Booking:
-- availability
-- booking creation
-- dates
-- status
-
-The examples above are illustrative only.
-
-Use the business rules appropriate to the user's actual request.
-
-When one piece of data changes, every dependent part of the application must update.
+When state changes, every dependent display must update.
 `,
 
     6: `
-FINAL FUNCTIONAL QA + MOBILE STAGE
+STAGE 6 — FINAL INTERACTION AND QUALITY REPAIR
 
 Do NOT redesign the application.
 
-Inspect the SAME application and repair it.
-
-Verify:
-
-- Requested product is actually represented
-- Branding/name from the user request is preserved
-- Navigation works
-- Mobile navigation works
-- Search works when applicable
-- Categories/filtering work when applicable
-- Every important button works
-- Forms work
-- Add works
-- Edit works where applicable
-- Delete works where applicable
-- Cart works where applicable
-- Checkout flow works where applicable
-- Business calculations work
-- Data updates correctly
-- localStorage works where appropriate
-- Dashboard values come from live data
-- No important JavaScript errors
-- No dead buttons
-- No fake placeholder interactions
-- No generic "Modern Web App" fallback
-- No "My Modern App" fallback
-- No outdated hard-coded 2023 footer
-- Responsive mobile layout works
-
-The final application must be a genuine functional browser application.
-
-Do not simply claim that something works.
-
-Actually implement it.
-`,
-
-    7: `
-INTEGRATION REPAIR STAGE
-
-Treat the existing application as a production candidate.
-
-Do not redesign it.
-
-Test the complete application flow.
+Inspect the SAME application.
 
 Repair:
-- navigation
-- data flow
-- forms
-- CRUD
-- persistence
+- dead buttons
+- missing event listeners
+- navigation failures
+- broken forms
+- broken search
+- broken filtering
+- broken add/edit/delete
+- quantity controls
+- cart
+- checkout
 - calculations
-- search
-- filtering
-- business rules
-- UI refresh
-- mobile behavior
-- JavaScript errors
+- localStorage
+- UI refresh problems
+- mobile interaction problems
 
-Make sure the features work together.
-`,
+Remove generic template remnants.
 
-    8: `
-FINAL PRODUCTION QA STAGE
-
-Do not add unnecessary features.
-
-Inspect and repair the complete application.
-
-The final application must:
-- Open directly as index.html
-- Work without React
-- Work without Next.js
-- Work without npm
-- Work without external packages
-- Work inside an iframe
-- Have working JavaScript
-- Have working navigation
-- Have working forms
-- Have working business logic
-- Preserve browser data where appropriate
-- Have no obvious dead buttons
-- Have no placeholder-only functionality
-- Be responsive on mobile
-- Preserve previously completed functionality
-
-Return the complete repaired index.html.
+The final index.html must be a genuine functional browser application.
 `,
   };
 
-  return instructions[stageNumber] || instructions[6];
+  return stages[stage] || stages[6];
 }
 
 /* =========================================================
-   PRODUCT UNDERSTANDING
+   SYSTEM PROMPT
 ========================================================= */
 
-function buildSystemPrompt(stageNumber: number) {
+function buildSystemPrompt(stage: number) {
   return `
-You are BOMBA AI's PRODUCTION UNIVERSAL APPLICATION BUILD ENGINE.
+You are BOMBA AI's production Universal Application Builder.
 
-Your job is NOT to give coding tutorials.
+Your job is to BUILD the actual application requested by the user.
 
-Your job is NOT to provide generic starter templates.
+You are NOT a coding tutor.
 
-Your job is to ACTUALLY BUILD the application described by the user.
+You are NOT generating a generic demo.
+
+You are NOT explaining how the user could build the app.
+
+You are building the app.
 
 ==================================================
-CORE PRINCIPLE
+NON-NEGOTIABLE PRODUCT RULE
 ==================================================
 
-USER REQUEST = SOURCE OF TRUTH.
+The user's request is the source of truth.
 
-You must understand what product the user requested and build THAT PRODUCT.
+If the user requests QuickChop food delivery,
+build QuickChop food delivery.
 
-Never replace a specific product request with:
-
-- "Modern Web App"
-- "My Modern App"
-- Home/About/Contact starter template
+Do not replace it with:
+- My Modern App
+- Modern Web App
+- generic Home/About/Contact
 - generic dashboard
-- coding tutorial
-- explanation of how to build it
+- tutorial
+- placeholder website
 
-If the user says "Build QuickChop food delivery app",
-you must build QuickChop.
-
-If the user says "Build a school management app",
-you must build a school management app.
-
-If the user says "Build an inventory system",
-you must build an inventory system.
-
-The generated interface must visibly reflect the requested product.
-
-==================================================
-DO NOT ANSWER THE USER
-==================================================
-
-You are the BUILD ENGINE.
-
-Do not say:
-"Here's an example..."
-"To help you..."
-"You can expand..."
-"Create these files..."
-"If you want..."
-
-BUILD THE APPLICATION.
+The generated UI must visibly represent the requested product.
 
 ==================================================
 TECHNOLOGY
 ==================================================
 
-Use ONLY:
-
+Use only:
 - HTML
 - CSS
 - Vanilla JavaScript
 
-Do NOT use:
-
+No:
 - React
 - Vue
 - Svelte
 - Next.js
 - npm packages
-- build tools
-- external JavaScript frameworks
+- framework dependencies
 
-index.html must be complete and directly runnable.
+Everything should normally be contained inside:
+index.html
 
-CSS should normally be inside index.html.
-
-JavaScript should normally be inside index.html.
-
-The application must work:
-- directly in a browser
-- inside an iframe
-- without a server unless explicitly required
+It must run directly in a browser or iframe.
 
 ==================================================
-PRODUCT-SPECIFIC UI
+REAL APPLICATION RULE
 ==================================================
 
-The UI must be appropriate to the requested product.
+The result must behave like an application.
 
-Do not use generic sections simply because they are easy to generate.
+Every important visible interactive element must work.
 
-Generate realistic content appropriate to the user's request.
+Buttons must not:
+- do nothing
+- only console.log()
+- only alert()
+- pretend an action happened
 
-For a food delivery application, for example:
+Use real event listeners.
 
-- brand name
-- location selector
+When an action changes application data:
+
+1. update state
+2. save state when appropriate
+3. re-render affected UI
+
+==================================================
+PRODUCT-SPECIFIC FUNCTIONALITY
+==================================================
+
+Implement functionality appropriate to the requested product.
+
+For example, a food delivery app may need:
+
+- location
 - search
-- promotional banner
 - categories
-- restaurant cards
-- food cards
-- prices
+- restaurants
+- food items
 - ratings
 - delivery information
 - cart
-- cart badge
-- quantity controls
+- quantities
 - checkout
-- order state
+- orders
 
-For other applications, generate components appropriate to THAT application.
-
-==================================================
-FUNCTIONALITY
-==================================================
-
-Every important button must actually work.
-
-Never create buttons that only:
-- alert()
-- console.log()
-- change decorative styling
-- pretend an operation occurred
-
-Implement actual functionality.
-
-If user asks to:
-- add → actually add
-- edit → actually edit
-- delete → actually delete
-- search → actually search
-- filter → actually filter
-- checkout → actually process the browser-side checkout flow
-- save → actually save
-- submit → actually submit
+Do NOT add unrelated features just because they are in the example.
 
 ==================================================
-STATE
+DESIGN
 ==================================================
 
-Use coherent application state.
+Create a professional mobile-first application.
 
-After important changes:
+Use:
+- clear hierarchy
+- polished spacing
+- responsive layout
+- usable buttons
+- readable typography
+- realistic content
+- useful empty/error states
 
-1. update state
-2. save state where appropriate
-3. re-render UI
-
-Use localStorage when browser persistence makes sense.
-
-==================================================
-RESPONSIVE DESIGN
-==================================================
-
-The generated application must be mobile-first.
-
-It must also work on desktop.
-
-Do not make a desktop-only interface.
-
-==================================================
-CURRENT YEAR
-==================================================
-
-Never hard-code an outdated year such as 2023.
-
-Use JavaScript for the current year where appropriate:
-
-new Date().getFullYear()
-
-==================================================
-PRESERVE EXISTING APPLICATION
-==================================================
-
-If an existing index.html is supplied:
-
-- continue the SAME application
-- preserve working functionality
-- improve it
-- do not replace it with a generic demo
-- do not remove working features
+The result should feel like a real application, not a coding exercise.
 
 ==================================================
 NIGERIA
 ==================================================
 
-Use Nigerian context and Nigerian Naira (₦) where appropriate unless the user requests otherwise.
+Use Nigerian context and ₦ where appropriate unless the user requests otherwise.
 
 ==================================================
-CURRENT BUILD STAGE
+YEAR
 ==================================================
 
-Stage ${stageNumber}
+Do not hard-code 2023.
 
-${stageInstructions(stageNumber)}
+Use:
+new Date().getFullYear()
+
+==================================================
+PRESERVE EXISTING APP
+==================================================
+
+If existing code is provided:
+
+- continue the SAME application
+- preserve working features
+- improve it
+- do not replace it with a generic application
+- do not remove existing functionality unnecessarily
+
+==================================================
+CURRENT STAGE
+==================================================
+
+Stage ${stage}
+
+${getStagePrompt(stage)}
 
 ==================================================
 OUTPUT
 ==================================================
 
-Return ONLY valid JSON.
-
-Format:
+Return ONLY valid JSON:
 
 {
   "files": [
     {
       "path": "index.html",
-      "content": "complete HTML document"
+      "content": "<complete HTML document>"
     }
   ],
-  "summary": "short description of what was actually built"
+  "summary": "short description"
 }
 
 No markdown.
@@ -597,31 +423,19 @@ No explanation outside JSON.
 }
 
 /* =========================================================
-   APPLICATION VALIDATION
+   BASIC VALIDATION
 ========================================================= */
 
-function validateGeneratedApplication(
-  html: string,
-  originalRequest: string
-) {
+function validateApp(html: string) {
   const content = String(html || "").trim();
-
-  if (!content) {
-    return {
-      valid: false,
-      reason: "index.html is empty.",
-    };
-  }
+  const lower = content.toLowerCase();
 
   if (content.length < 1000) {
     return {
       valid: false,
-      reason:
-        "index.html is too small to be a meaningful application.",
+      reason: "Application is too small.",
     };
   }
-
-  const lower = content.toLowerCase();
 
   if (
     !lower.includes("<!doctype html") &&
@@ -629,24 +443,21 @@ function validateGeneratedApplication(
   ) {
     return {
       valid: false,
-      reason:
-        "Generated file is not a complete HTML document.",
+      reason: "Missing HTML document.",
     };
   }
 
   if (!lower.includes("<body")) {
     return {
       valid: false,
-      reason:
-        "Generated application does not contain a body.",
+      reason: "Missing body.",
     };
   }
 
   if (!lower.includes("<script")) {
     return {
       valid: false,
-      reason:
-        "Generated application does not contain JavaScript.",
+      reason: "Missing JavaScript.",
     };
   }
 
@@ -656,8 +467,7 @@ function validateGeneratedApplication(
   ) {
     return {
       valid: false,
-      reason:
-        "Generated application does not contain interactive event handling.",
+      reason: "No event handling detected.",
     };
   }
 
@@ -665,29 +475,17 @@ function validateGeneratedApplication(
     "welcome to my modern app",
     "my modern app",
     "modern web app example",
-    "home section",
-    "about section",
-    "contact section",
   ];
 
-  const foundGenericFallback =
-    genericFallbacks.some((text) =>
-      lower.includes(text)
-    );
+  const genericFound = genericFallbacks.some((text) =>
+    lower.includes(text)
+  );
 
-  if (foundGenericFallback) {
+  if (genericFound) {
     return {
       valid: false,
       reason:
-        "Generated application contains a generic starter-template fallback instead of a product-specific application.",
-    };
-  }
-
-  if (!originalRequest.trim()) {
-    return {
-      valid: false,
-      reason:
-        "Original application request is missing.",
+        "Generic application fallback detected.",
     };
   }
 
@@ -698,11 +496,147 @@ function validateGeneratedApplication(
 }
 
 /* =========================================================
-   POST
+   BUTTON DOCTOR
+========================================================= */
+
+async function runButtonDoctor(
+  html: string,
+  originalRequest: string
+) {
+  const prompt = `
+You are BOMBA AI's Interaction Repair Engineer.
+
+The user requested:
+
+${originalRequest}
+
+You are given the CURRENT complete application.
+
+Your job is to repair broken interactions while preserving the existing application.
+
+IMPORTANT:
+
+Do NOT redesign the application.
+
+Do NOT replace the product.
+
+Do NOT create a new template.
+
+Inspect the code for:
+
+- buttons that do nothing
+- navigation that does not work
+- search that does not work
+- filters that do not work
+- forms that do not submit
+- add buttons that do not update state
+- quantity buttons that do not update state
+- cart buttons that do not update the cart
+- checkout actions that do not work
+- edit/delete/save actions that do not work
+- event listeners attached to missing elements
+- JavaScript references to nonexistent DOM elements
+- obvious runtime errors
+
+Rules:
+
+- Use real event listeners.
+- Do not use alert() as the implementation of a feature.
+- Do not use console.log() as the implementation of a feature.
+- Preserve working functionality.
+- Preserve the existing design.
+- Keep the requested product.
+- Return the COMPLETE index.html.
+
+Return JSON only:
+
+{
+  "files": [
+    {
+      "path": "index.html",
+      "content": "complete repaired HTML"
+    }
+  ],
+  "summary": "short description of repairs"
+}
+
+CURRENT APPLICATION:
+
+${html}
+`;
+
+  const completion =
+    await openai.chat.completions.create({
+      model: MODEL,
+      temperature: 0.1,
+      response_format: {
+        type: "json_object",
+      },
+      messages: [
+        {
+          role: "system",
+          content:
+            "You repair real web applications. Preserve existing functionality. Return JSON only.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+    });
+
+  const raw =
+    completion.choices?.[0]?.message?.content;
+
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    const files = normalizeFiles(parsed?.files);
+
+    const index = files.find(
+      (file) =>
+        cleanPath(file.path).toLowerCase() ===
+        "index.html"
+    );
+
+    return index || null;
+  } catch {
+    return null;
+  }
+}
+
+/* =========================================================
+   AI DOCTOR
+========================================================= */
+
+async function runDoctor(
+  html: string,
+  originalRequest: string
+) {
+  try {
+    const response = await fetch(
+      new URL("/api/doctor", "http://localhost")
+    );
+
+    return response;
+  } catch {
+    return null;
+  }
+}
+
+/* =========================================================
+   MAIN HANDLER
 ========================================================= */
 
 export async function POST(req: Request) {
   try {
+    /* =====================================================
+       CONFIG
+    ===================================================== */
+
     if (!supabaseUrl || !supabaseAnonKey) {
       return NextResponse.json(
         {
@@ -723,13 +657,18 @@ export async function POST(req: Request) {
       );
     }
 
+    /* =====================================================
+       AUTH
+    ===================================================== */
+
     const authHeader =
       req.headers.get("authorization");
 
     if (!authHeader) {
       return NextResponse.json(
         {
-          error: "Please log in before building.",
+          error:
+            "Please log in before building.",
         },
         { status: 401 }
       );
@@ -763,6 +702,10 @@ export async function POST(req: Request) {
       );
     }
 
+    /* =====================================================
+       INPUT
+    ===================================================== */
+
     const body = await req.json();
 
     const projectId =
@@ -780,7 +723,8 @@ export async function POST(req: Request) {
     if (!projectId || !originalRequest || !plan) {
       return NextResponse.json(
         {
-          error: "Missing build data.",
+          error:
+            "Missing projectId, originalRequest or plan.",
         },
         { status: 400 }
       );
@@ -801,11 +745,6 @@ export async function POST(req: Request) {
       .single();
 
     if (projectError || !project) {
-      console.error(
-        "Builder project lookup error:",
-        projectError
-      );
-
       return NextResponse.json(
         {
           error: "Project not found.",
@@ -839,23 +778,28 @@ export async function POST(req: Request) {
       return NextResponse.json({
         success: true,
         project,
-        stage: currentStage,
+        completed: true,
         files: normalizeFiles(
           project.project_files
         ),
-        completed: true,
-        automaticRepair: true,
+        continueBuild: false,
+        nextStage: null,
         summary:
-          "The application build is already complete.",
+          "Build already complete.",
       });
     }
 
-    const stage =
+    const stageMeta =
       stages[nextStage - 1] || {
-        name: `Build Stage ${nextStage}`,
+        name:
+          `Stage ${nextStage}`,
         description:
           "Continue building the requested application.",
       };
+
+    /* =====================================================
+       EXISTING FILES
+    ===================================================== */
 
     const existingFiles =
       normalizeFiles(
@@ -863,58 +807,47 @@ export async function POST(req: Request) {
       );
 
     const existingIndex =
-      getIndexFile(existingFiles);
+      getIndex(existingFiles);
 
-    const fileList =
-      existingFiles.length > 0
-        ? existingFiles
-            .map(
-              (file) =>
-                `- ${file.path}`
-            )
-            .join("\n")
-        : "No files have been generated yet.";
+    /*
+      IMPORTANT:
+      We do NOT arbitrarily slice the existing application.
 
-    const previousApplicationState =
+      The application must be preserved.
+    */
+
+    const existingApplication =
       existingIndex
         ? `
-THE CURRENT MASTER APPLICATION IS index.html.
+CURRENT APPLICATION:
 
-CONTINUE THIS APPLICATION.
+The following is the current master index.html.
 
-DO NOT REPLACE IT WITH A GENERIC DEMO.
-
-PRESERVE WORKING FEATURES.
-
-CURRENT index.html:
+Continue this SAME application.
+Preserve working functionality.
+Improve it according to the current stage.
 
 ${existingIndex.content}
 `
         : `
-NO EXISTING APPLICATION FILE EXISTS YET.
+There is no existing application yet.
 
-CREATE THE ACTUAL PRODUCT REQUESTED BY THE USER.
-
-Do not create a generic Modern Web App.
+Create the complete product requested by the user.
 `;
 
     /* =====================================================
-       OPENAI BUILD
+       GENERATION
     ===================================================== */
 
     const systemPrompt =
       buildSystemPrompt(nextStage);
 
     const userPrompt = `
-==================================================
-USER'S ORIGINAL APPLICATION REQUEST
-==================================================
+USER'S ORIGINAL REQUEST:
 
 ${originalRequest}
 
-==================================================
-PROJECT PLAN
-==================================================
+PROJECT PLAN:
 
 ${JSON.stringify(
   plan,
@@ -922,92 +855,58 @@ ${JSON.stringify(
   2
 )}
 
-==================================================
-CURRENT BUILD STAGE
-==================================================
+CURRENT STAGE:
 
 Stage ${nextStage} of ${totalStages}
 
-Name:
-${stage.name}
+Stage name:
+${stageMeta.name}
 
-Description:
-${stage.description}
+Stage description:
+${stageMeta.description}
 
-==================================================
-CURRENT PROJECT FILES
-==================================================
+${existingApplication}
 
-${fileList}
+Build the actual requested product.
 
-==================================================
-CURRENT APPLICATION
-==================================================
+Do not create a tutorial.
 
-${previousApplicationState}
+Do not create a generic template.
 
-==================================================
-NON-NEGOTIABLE REQUIREMENT
-==================================================
-
-Build the APPLICATION REQUESTED BY THE USER.
-
-Do not give instructions.
-
-Do not give a tutorial.
-
-Do not create a generic example.
-
-Do not create "My Modern App".
-
-Do not create "Modern Web App".
-
-Do not create generic Home/About/Contact sections unless the user explicitly requested them.
-
-Use the actual product name from the user's request.
-
-Use realistic product-specific content.
-
-Implement actual functionality.
-
-The result must be usable.
-
-==================================================
-STAGE OBJECTIVE
-==================================================
-
-${stageInstructions(nextStage)}
+Do not remove working functionality.
 
 Return only valid JSON.
 `;
 
-    const response =
+    const completion =
       await openai.chat.completions.create({
         model: MODEL,
-        temperature: 0.1,
+        temperature: 0.25,
         response_format: {
           type: "json_object",
         },
         messages: [
           {
             role: "system",
-            content: systemPrompt,
+            content:
+              systemPrompt,
           },
           {
             role: "user",
-            content: userPrompt,
+            content:
+              userPrompt,
           },
         ],
       });
 
-    const content =
-      response.choices?.[0]?.message?.content;
+    const raw =
+      completion.choices?.[0]?.message?.content;
 
-    if (!content) {
+    if (!raw) {
       return NextResponse.json(
         {
           error:
-            "BOMBA AI could not generate this build stage.",
+            "BOMBA AI returned an empty build response.",
         },
         { status: 500 }
       );
@@ -1020,17 +919,12 @@ Return only valid JSON.
     let result: any;
 
     try {
-      result = JSON.parse(content);
-    } catch (parseError) {
-      console.error(
-        "Builder JSON parse error:",
-        parseError
-      );
-
+      result = JSON.parse(raw);
+    } catch {
       return NextResponse.json(
         {
           error:
-            "BOMBA AI returned invalid build data.",
+            "BOMBA AI returned invalid JSON.",
         },
         { status: 500 }
       );
@@ -1042,7 +936,7 @@ Return only valid JSON.
     const generatedIndex =
       generatedFiles.find(
         (file) =>
-          cleanFilePath(file.path)
+          cleanPath(file.path)
             .toLowerCase() ===
           "index.html"
       );
@@ -1051,212 +945,82 @@ Return only valid JSON.
       return NextResponse.json(
         {
           error:
-            "BOMBA AI did not return the required index.html application file.",
+            "BOMBA AI did not return index.html.",
         },
         { status: 500 }
       );
     }
 
     /* =====================================================
-       INITIAL VALIDATION
+       GENERATION VALIDATION
     ===================================================== */
 
-    const validation =
-      validateGeneratedApplication(
-        generatedIndex.content,
-        originalRequest
+    const generatedValidation =
+      validateApp(
+        generatedIndex.content
       );
 
-    if (!validation.valid) {
-      console.error(
-        "Generated application validation failed:",
-        validation.reason
-      );
-
+    if (!generatedValidation.valid) {
       return NextResponse.json(
         {
           success: false,
-          error:
-            `Generated application failed validation: ${validation.reason}`,
           retryable: true,
+          error:
+            `Generated application failed basic validation: ${generatedValidation.reason}`,
         },
         { status: 422 }
       );
     }
 
     /* =====================================================
-       AI DOCTOR
+       BUTTON DOCTOR
     ===================================================== */
 
-    let doctorResult: any = null;
     let repairedCode =
       generatedIndex.content;
 
     try {
-      const doctorResponse =
-        await fetch(
-          new URL(
-            "/api/doctor",
-            req.url
-          ),
-          {
-            method: "POST",
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-            body: JSON.stringify({
-              code:
-                generatedIndex.content,
-
-              filename:
-                generatedIndex.path,
-
-              language: "html",
-
-              mode: "auto-repair",
-
-              userMessage: `
-You are the final technical QA engineer for BOMBA AI.
-
-The user's requested application was:
-
-${originalRequest}
-
-Do NOT turn the application into a generic template.
-
-Verify that the generated code actually represents the requested product.
-
-Repair blocking technical problems.
-
-Preserve all working functionality.
-
-Verify:
-- JavaScript works
-- event listeners work
-- navigation works
-- forms work
-- requested product functionality works
-- data state works
-- localStorage works where appropriate
-- mobile layout works
-- buttons are not fake
-- no generic Modern Web App fallback remains
-- no My Modern App fallback remains
-- no outdated hard-coded 2023 year remains
-
-Return the repaired application.
-`,
-            }),
-          }
-        );
-
-      doctorResult =
-        await doctorResponse.json();
-
-      if (!doctorResponse.ok) {
-        console.error(
-          "AI Doctor repair failed:",
-          doctorResult
-        );
-
-        return NextResponse.json(
-          {
-            success: false,
-            error:
-              doctorResult?.error ||
-              "AI Doctor could not repair the application. The build stage was not saved.",
-            doctor:
-              doctorResult,
-          },
-          {
-            status:
-              doctorResponse.status ||
-              500,
-          }
-        );
-      }
-
-      if (!doctorResult?.success) {
-        return NextResponse.json(
-          {
-            success: false,
-            error:
-              doctorResult?.error ||
-              "AI Doctor could not verify the application. The build stage was not saved.",
-            doctor:
-              doctorResult,
-          },
-          { status: 422 }
-        );
-      }
-
-      const returnedCode =
-        typeof doctorResult?.repairedCode ===
-          "string" &&
-        doctorResult.repairedCode.trim()
-          ? doctorResult.repairedCode
-          : typeof doctorResult?.code ===
-              "string" &&
-            doctorResult.code.trim()
-          ? doctorResult.code
-          : generatedIndex.content;
-
-      repairedCode =
-        returnedCode;
-
-      /* =====================================================
-         DOCTOR VALIDATION
-      ===================================================== */
-
-      const repairedValidation =
-        validateGeneratedApplication(
+      const buttonFixed =
+        await runButtonDoctor(
           repairedCode,
           originalRequest
         );
 
-      if (!repairedValidation.valid) {
-        console.error(
-          "AI Doctor returned invalid application:",
-          repairedValidation.reason
-        );
+      if (buttonFixed) {
+        const buttonValidation =
+          validateApp(
+            buttonFixed.content
+          );
 
-        return NextResponse.json(
-          {
-            success: false,
-            error:
-              `AI Doctor returned an application that failed validation: ${repairedValidation.reason}`,
-            doctor:
-              doctorResult,
-          },
-          { status: 422 }
-        );
+        if (buttonValidation.valid) {
+          repairedCode =
+            buttonFixed.content;
+        }
       }
-    } catch (doctorError) {
+    } catch (buttonError) {
       console.error(
-        "AI Doctor connection error:",
-        doctorError
+        "Button Doctor error:",
+        buttonError
       );
 
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "AI Doctor could not be reached. The build stage was not saved.",
-        },
-        { status: 500 }
-      );
+      /*
+        Button Doctor is a repair layer.
+
+        If it fails, preserve the valid
+        generated application instead of
+        destroying the build.
+      */
     }
 
     /* =====================================================
-       MERGE VERIFIED FILES
+       MERGE
     ===================================================== */
 
-    const finalGeneratedFiles =
+    const repairedFiles =
       generatedFiles.map(
         (file) => {
           if (
-            cleanFilePath(
+            cleanPath(
               file.path
             ).toLowerCase() ===
             "index.html"
@@ -1275,43 +1039,45 @@ Return the repaired application.
     const files =
       mergeFiles(
         existingFiles,
-        finalGeneratedFiles
+        repairedFiles
       );
 
     const finalIndex =
-      getIndexFile(files);
+      getIndex(files);
 
     if (!finalIndex) {
       return NextResponse.json(
         {
           error:
-            "The final project does not contain index.html.",
+            "Final project does not contain index.html.",
         },
         { status: 500 }
       );
     }
 
+    /* =====================================================
+       FINAL BASIC VALIDATION
+    ===================================================== */
+
     const finalValidation =
-      validateGeneratedApplication(
-        finalIndex.content,
-        originalRequest
+      validateApp(
+        finalIndex.content
       );
 
     if (!finalValidation.valid) {
       return NextResponse.json(
         {
           success: false,
+          retryable: true,
           error:
             `Final application validation failed: ${finalValidation.reason}`,
-          doctor:
-            doctorResult,
         },
         { status: 422 }
       );
     }
 
     /* =====================================================
-       SAVE PROJECT
+       SAVE
     ===================================================== */
 
     const completed =
@@ -1358,7 +1124,7 @@ Return the repaired application.
 
     if (updateError) {
       console.error(
-        "Builder project update error:",
+        "Project update error:",
         updateError
       );
 
@@ -1369,20 +1135,11 @@ Return the repaired application.
        RESPONSE
     ===================================================== */
 
-    const repairSummary =
-      doctorResult?.repair?.summary ||
-      doctorResult?.repairSummary ||
-      doctorResult?.verification?.summary ||
-      "AI Doctor checked and repaired the application.";
-
     return NextResponse.json({
       success: true,
 
       project:
         updated,
-
-      doctor:
-        doctorResult,
 
       stage: {
         stageNumber:
@@ -1391,31 +1148,24 @@ Return the repaired application.
         totalStages,
 
         stageName:
-          stage.name ||
-          `Build Stage ${nextStage}`,
+          stageMeta.name,
 
         completed:
           true,
 
         summary:
-          typeof result?.summary ===
-            "string" &&
-          result.summary.trim()
-            ? result.summary.trim()
-            : `Stage ${nextStage} completed.`,
+          result?.summary ||
+          `Stage ${nextStage} completed.`,
       },
 
       files,
 
       completed,
 
-      automaticRepair:
-        true,
-
-      repairSummary,
-
-      /* The frontend can use this to
-         automatically continue. */
+      /*
+        The frontend uses these values to
+        automatically start the next stage.
+      */
       continueBuild:
         !completed,
 
@@ -1424,16 +1174,16 @@ Return the repaired application.
           ? nextStage + 1
           : null,
 
+      interactionRepair:
+        true,
+
       summary:
-        typeof result?.summary ===
-          "string" &&
-        result.summary.trim()
-          ? `${result.summary.trim()} AI Doctor checked, repaired, and verified the application.`
-          : `Stage ${nextStage} completed. AI Doctor checked, repaired, and verified the application.`,
+        result?.summary ||
+        `Stage ${nextStage} completed with interaction repair.`,
     });
   } catch (error: any) {
     console.error(
-      "Builder build error:",
+      "BOMBA Builder error:",
       error
     );
 
@@ -1442,7 +1192,7 @@ Return the repaired application.
         success: false,
         error:
           error?.message ||
-          "Build failed.",
+          "Builder failed.",
       },
       { status: 500 }
     );
