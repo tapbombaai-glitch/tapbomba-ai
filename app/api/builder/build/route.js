@@ -1,1200 +1,561 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import OpenAI from "openai";
-
-export const runtime = "nodejs";
-export const maxDuration = 60;
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
-
-/* =========================================================
-   FILE HELPERS
-========================================================= */
-
-function cleanPath(path: unknown) {
-  return String(path || "")
-    .trim()
-    .replace(/^\/+/, "");
-}
-
-function normalizeFiles(files: unknown) {
-  if (!Array.isArray(files)) return [];
-
-  return files
-    .filter(
-      (file) =>
-        file &&
-        typeof file.path === "string" &&
-        file.path.trim() &&
-        typeof file.content === "string"
-    )
-    .map((file) => ({
-      path: cleanPath(file.path),
-      content: file.content,
-    }))
-    .filter((file) => file.path);
-}
-
-function mergeFiles(existing: unknown, generated: unknown) {
-  const files = [...normalizeFiles(existing)];
-
-  for (const generatedFile of normalizeFiles(generated)) {
-    const index = files.findIndex(
-      (file) =>
-        cleanPath(file.path).toLowerCase() ===
-        cleanPath(generatedFile.path).toLowerCase()
-    );
-
-    if (index >= 0) {
-      files[index] = generatedFile;
-    } else {
-      files.push(generatedFile);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <title>QuickChop – Food Delivery</title>
+  <style>
+    :root {
+      --primary: #e85d04;
+      --primary-dark: #d00000;
+      --bg: #f8f9fa;
+      --card: #ffffff;
+      --text: #1a1a1a;
+      --muted: #6c757d;
+      --border: #e9ecef;
+      --success: #2a9d8f;
     }
-  }
-
-  return files;
-}
-
-function getIndex(files: unknown) {
-  return normalizeFiles(files).find(
-    (file) =>
-      cleanPath(file.path).toLowerCase() === "index.html"
-  );
-}
-
-/* =========================================================
-   STAGE INSTRUCTIONS
-========================================================= */
-
-function getStagePrompt(stage: number) {
-  const stages: Record<number, string> = {
-    1: `
-STAGE 1 — REAL PRODUCT FOUNDATION
-
-Build the actual product requested by the user.
-
-Do NOT build a generic website.
-
-Requirements:
-- Complete HTML5 document
-- Product-specific branding and content
-- Product-specific screens
-- Realistic demo data
-- Mobile-first responsive UI
-- Vanilla JavaScript
-- Everything in index.html
-- Working navigation
-- Working important buttons
-- Working basic interactions
-
-CRITICAL BUTTON RULE:
-
-Every visible important button must perform a real action.
-
-Do not create buttons that:
-- do nothing
-- only console.log()
-- only alert()
-- exist only for decoration
-
-Use real event listeners and real application state.
-
-The application must already behave like the requested product after Stage 1.
-`,
-
-    2: `
-STAGE 2 — DATA AND APPLICATION STATE
-
-Continue the SAME application.
-
-Do not replace it with a new template.
-
-Implement:
-- coherent application state
-- realistic data
-- localStorage where appropriate
-- load/save helpers
-- add/update/delete helpers where appropriate
-- UI rendered from state
-
-Important actions must:
-1. read state
-2. update state
-3. save state when appropriate
-4. update the UI
-
-Every important button must remain functional.
-`,
-
-    3: `
-STAGE 3 — COMPLETE USER WORKFLOWS
-
-Continue the SAME application.
-
-Implement the primary workflow requested by the user.
-
-Examples:
-
-Food delivery:
-browse → search → category → restaurant → food → cart → checkout
-
-Booking:
-browse → select → date/time → booking → confirmation
-
-Inventory:
-products → add/edit → stock → transactions → totals
-
-Use the workflow appropriate to the actual user request.
-
-Navigation, search, filtering and forms must actually work.
-
-Do not create disconnected mock screens.
-`,
-
-    4: `
-STAGE 4 — INTERACTIONS, CRUD AND FORMS
-
-Continue the SAME application.
-
-Repair and implement important actions:
-
-- Add
-- Edit
-- Delete
-- Save
-- Cancel
-- Search
-- Filter
-- Submit
-- Select
-- Quantity controls
-- Navigation
-- Checkout where applicable
-
-Every important action must:
-- have a real event handler
-- validate input when necessary
-- update application state
-- persist data where appropriate
-- re-render affected UI
-- provide useful feedback
-
-No fake buttons.
-No alert-only functionality.
-`,
-
-    5: `
-STAGE 5 — BUSINESS LOGIC
-
-Continue the SAME application.
-
-Implement the real business rules required by the user's product.
-
-All calculations must come from live application state.
-
-Examples for a food app:
-- quantities
-- subtotal
-- delivery fee
-- total
-- cart badge
-- order creation
-- order status
-
-Use rules appropriate to the actual requested application.
-
-When state changes, every dependent display must update.
-`,
-
-    6: `
-STAGE 6 — FINAL INTERACTION AND QUALITY REPAIR
-
-Do NOT redesign the application.
-
-Inspect the SAME application.
-
-Repair:
-- dead buttons
-- missing event listeners
-- navigation failures
-- broken forms
-- broken search
-- broken filtering
-- broken add/edit/delete
-- quantity controls
-- cart
-- checkout
-- calculations
-- localStorage
-- UI refresh problems
-- mobile interaction problems
-
-Remove generic template remnants.
-
-The final index.html must be a genuine functional browser application.
-`,
-  };
-
-  return stages[stage] || stages[6];
-}
-
-/* =========================================================
-   SYSTEM PROMPT
-========================================================= */
-
-function buildSystemPrompt(stage: number) {
-  return `
-You are BOMBA AI's production Universal Application Builder.
-
-Your job is to BUILD the actual application requested by the user.
-
-You are NOT a coding tutor.
-
-You are NOT generating a generic demo.
-
-You are NOT explaining how the user could build the app.
-
-You are building the app.
-
-==================================================
-NON-NEGOTIABLE PRODUCT RULE
-==================================================
-
-The user's request is the source of truth.
-
-If the user requests QuickChop food delivery,
-build QuickChop food delivery.
-
-Do not replace it with:
-- My Modern App
-- Modern Web App
-- generic Home/About/Contact
-- generic dashboard
-- tutorial
-- placeholder website
-
-The generated UI must visibly represent the requested product.
-
-==================================================
-TECHNOLOGY
-==================================================
-
-Use only:
-- HTML
-- CSS
-- Vanilla JavaScript
-
-No:
-- React
-- Vue
-- Svelte
-- Next.js
-- npm packages
-- framework dependencies
-
-Everything should normally be contained inside:
-index.html
-
-It must run directly in a browser or iframe.
-
-==================================================
-REAL APPLICATION RULE
-==================================================
-
-The result must behave like an application.
-
-Every important visible interactive element must work.
-
-Buttons must not:
-- do nothing
-- only console.log()
-- only alert()
-- pretend an action happened
-
-Use real event listeners.
-
-When an action changes application data:
-
-1. update state
-2. save state when appropriate
-3. re-render affected UI
-
-==================================================
-PRODUCT-SPECIFIC FUNCTIONALITY
-==================================================
-
-Implement functionality appropriate to the requested product.
-
-For example, a food delivery app may need:
-
-- location
-- search
-- categories
-- restaurants
-- food items
-- ratings
-- delivery information
-- cart
-- quantities
-- checkout
-- orders
-
-Do NOT add unrelated features just because they are in the example.
-
-==================================================
-DESIGN
-==================================================
-
-Create a professional mobile-first application.
-
-Use:
-- clear hierarchy
-- polished spacing
-- responsive layout
-- usable buttons
-- readable typography
-- realistic content
-- useful empty/error states
-
-The result should feel like a real application, not a coding exercise.
-
-==================================================
-NIGERIA
-==================================================
-
-Use Nigerian context and ₦ where appropriate unless the user requests otherwise.
-
-==================================================
-YEAR
-==================================================
-
-Do not hard-code 2023.
-
-Use:
-new Date().getFullYear()
-
-==================================================
-PRESERVE EXISTING APP
-==================================================
-
-If existing code is provided:
-
-- continue the SAME application
-- preserve working features
-- improve it
-- do not replace it with a generic application
-- do not remove existing functionality unnecessarily
-
-==================================================
-CURRENT STAGE
-==================================================
-
-Stage ${stage}
-
-${getStagePrompt(stage)}
-
-==================================================
-OUTPUT
-==================================================
-
-Return ONLY valid JSON:
-
-{
-  "files": [
-    {
-      "path": "index.html",
-      "content": "<complete HTML document>"
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding-bottom: 80px;
     }
-  ],
-  "summary": "short description"
-}
-
-No markdown.
-No code fences.
-No explanation outside JSON.
-`;
-}
-
-/* =========================================================
-   BASIC VALIDATION
-========================================================= */
-
-function validateApp(html: string) {
-  const content = String(html || "").trim();
-  const lower = content.toLowerCase();
-
-  if (content.length < 1000) {
-    return {
-      valid: false,
-      reason: "Application is too small.",
-    };
-  }
-
-  if (
-    !lower.includes("<!doctype html") &&
-    !lower.includes("<html")
-  ) {
-    return {
-      valid: false,
-      reason: "Missing HTML document.",
-    };
-  }
-
-  if (!lower.includes("<body")) {
-    return {
-      valid: false,
-      reason: "Missing body.",
-    };
-  }
-
-  if (!lower.includes("<script")) {
-    return {
-      valid: false,
-      reason: "Missing JavaScript.",
-    };
-  }
-
-  if (
-    !lower.includes("addeventlistener") &&
-    !lower.includes("onclick")
-  ) {
-    return {
-      valid: false,
-      reason: "No event handling detected.",
-    };
-  }
-
-  const genericFallbacks = [
-    "welcome to my modern app",
-    "my modern app",
-    "modern web app example",
-  ];
-
-  const genericFound = genericFallbacks.some((text) =>
-    lower.includes(text)
-  );
-
-  if (genericFound) {
-    return {
-      valid: false,
-      reason:
-        "Generic application fallback detected.",
-    };
-  }
-
-  return {
-    valid: true,
-    reason: "",
-  };
-}
-
-/* =========================================================
-   BUTTON DOCTOR
-========================================================= */
-
-async function runButtonDoctor(
-  html: string,
-  originalRequest: string
-) {
-  const prompt = `
-You are BOMBA AI's Interaction Repair Engineer.
-
-The user requested:
-
-${originalRequest}
-
-You are given the CURRENT complete application.
-
-Your job is to repair broken interactions while preserving the existing application.
-
-IMPORTANT:
-
-Do NOT redesign the application.
-
-Do NOT replace the product.
-
-Do NOT create a new template.
-
-Inspect the code for:
-
-- buttons that do nothing
-- navigation that does not work
-- search that does not work
-- filters that do not work
-- forms that do not submit
-- add buttons that do not update state
-- quantity buttons that do not update state
-- cart buttons that do not update the cart
-- checkout actions that do not work
-- edit/delete/save actions that do not work
-- event listeners attached to missing elements
-- JavaScript references to nonexistent DOM elements
-- obvious runtime errors
-
-Rules:
-
-- Use real event listeners.
-- Do not use alert() as the implementation of a feature.
-- Do not use console.log() as the implementation of a feature.
-- Preserve working functionality.
-- Preserve the existing design.
-- Keep the requested product.
-- Return the COMPLETE index.html.
-
-Return JSON only:
-
-{
-  "files": [
-    {
-      "path": "index.html",
-      "content": "complete repaired HTML"
+    header {
+      background: var(--primary);
+      color: white;
+      padding: 14px 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
     }
-  ],
-  "summary": "short description of repairs"
-}
+    .logo { font-size: 1.4rem; font-weight: 800; letter-spacing: -0.5px; }
+    .location { font-size: 0.85rem; opacity: 0.9; }
+    .cart-btn {
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: white;
+      padding: 8px 14px;
+      border-radius: 20px;
+      font-weight: 600;
+      cursor: pointer;
+      position: relative;
+    }
+    .cart-count {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      background: #fff;
+      color: var(--primary-dark);
+      font-size: 0.7rem;
+      font-weight: 700;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .search-bar {
+      padding: 12px 16px;
+      background: white;
+      border-bottom: 1px solid var(--border);
+    }
+    .search-bar input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 1rem;
+      outline: none;
+    }
+    .search-bar input:focus { border-color: var(--primary); }
+    .categories {
+      display: flex;
+      gap: 10px;
+      padding: 14px 16px;
+      overflow-x: auto;
+      background: white;
+      border-bottom: 1px solid var(--border);
+    }
+    .cat-btn {
+      flex-shrink: 0;
+      padding: 8px 16px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: white;
+      font-size: 0.9rem;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .cat-btn.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+    .section { padding: 16px; }
+    .section-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .food-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 14px;
+    }
+    .food-card {
+      background: var(--card);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      display: flex;
+      flex-direction: column;
+    }
+    .food-img {
+      height: 110px;
+      background: linear-gradient(135deg, #ff9a3c, #e85d04);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.5rem;
+    }
+    .food-body { padding: 12px; flex: 1; display: flex; flex-direction: column; }
+    .food-name { font-weight: 600; font-size: 0.95rem; margin-bottom: 4px; }
+    .food-meta { font-size: 0.8rem; color: var(--muted); margin-bottom: 8px; }
+    .food-price { font-weight: 700; color: var(--primary-dark); margin-bottom: 10px; }
+    .add-btn {
+      margin-top: auto;
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 8px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    .add-btn:active { transform: scale(0.97); }
+    /* CART DRAWER */
+    .cart-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 200;
+      display: none;
+    }
+    .cart-overlay.open { display: block; }
+    .cart-drawer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: white;
+      border-radius: 20px 20px 0 0;
+      max-height: 85vh;
+      overflow-y: auto;
+      z-index: 201;
+      transform: translateY(100%);
+      transition: transform 0.3s ease;
+      padding-bottom: 20px;
+    }
+    .cart-drawer.open { transform: translateY(0); }
+    .cart-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      background: white;
+    }
+    .cart-header h2 { font-size: 1.2rem; }
+    .close-cart {
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: var(--muted);
+    }
+    .cart-items { padding: 12px 16px; }
+    .cart-item {
+      display: flex;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+      align-items: center;
+    }
+    .cart-item-info { flex: 1; }
+    .cart-item-name { font-weight: 600; }
+    .cart-item-price { font-size: 0.9rem; color: var(--muted); }
+    .qty-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .qty-btn {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: white;
+      font-size: 1.1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .cart-summary {
+      padding: 16px 20px;
+      border-top: 1px solid var(--border);
+    }
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 0.95rem;
+    }
+    .summary-row.total {
+      font-weight: 700;
+      font-size: 1.15rem;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--border);
+    }
+    .checkout-btn {
+      width: 100%;
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 16px;
+      border-radius: 12px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin-top: 16px;
+      cursor: pointer;
+    }
+    .checkout-btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .empty-cart {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--muted);
+    }
+    /* ORDER SUCCESS */
+    .success-screen {
+      display: none;
+      text-align: center;
+      padding: 60px 24px;
+    }
+    .success-screen.show { display: block; }
+    .success-icon { font-size: 4rem; margin-bottom: 16px; }
+    .success-screen h2 { margin-bottom: 8px; }
+    .success-screen p { color: var(--muted); margin-bottom: 24px; }
+    .back-home {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 12px 28px;
+      border-radius: 10px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    footer {
+      text-align: center;
+      padding: 20px;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <div class="logo">QuickChop</div>
+      <div class="location">📍 Lagos, Nigeria</div>
+    </div>
+    <button class="cart-btn" id="openCartBtn">
+      🛒 Cart
+      <span class="cart-count" id="cartCount">0</span>
+    </button>
+  </header>
 
-CURRENT APPLICATION:
+  <div class="search-bar">
+    <input type="text" id="searchInput" placeholder="Search jollof, suya, pizza..." />
+  </div>
 
-${html}
-`;
+  <div class="categories" id="categories">
+    <button class="cat-btn active" data-cat="all">All</button>
+    <button class="cat-btn" data-cat="Rice">Rice</button>
+    <button class="cat-btn" data-cat="Grills">Grills</button>
+    <button class="cat-btn" data-cat="Fast Food">Fast Food</button>
+    <button class="cat-btn" data-cat="Drinks">Drinks</button>
+    <button class="cat-btn" data-cat="Swallow">Swallow</button>
+  </div>
 
-  const completion =
-    await openai.chat.completions.create({
-      model: MODEL,
-      temperature: 0.1,
-      response_format: {
-        type: "json_object",
-      },
-      messages: [
-        {
-          role: "system",
-          content:
-            "You repair real web applications. Preserve existing functionality. Return JSON only.",
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-    });
+  <div class="section">
+    <h2 class="section-title">Popular Near You</h2>
+    <div class="food-grid" id="foodGrid"></div>
+  </div>
 
-  const raw =
-    completion.choices?.[0]?.message?.content;
+  <div class="success-screen" id="successScreen">
+    <div class="success-icon">🎉</div>
+    <h2>Order Placed!</h2>
+    <p>Your food is on the way. Estimated delivery: 25–35 mins</p>
+    <button class="back-home" id="backHomeBtn">Back to Menu</button>
+  </div>
 
-  if (!raw) {
-    return null;
-  }
+  <!-- CART -->
+  <div class="cart-overlay" id="cartOverlay"></div>
+  <div class="cart-drawer" id="cartDrawer">
+    <div class="cart-header">
+      <h2>Your Cart</h2>
+      <button class="close-cart" id="closeCartBtn">×</button>
+    </div>
+    <div class="cart-items" id="cartItems"></div>
+    <div class="cart-summary" id="cartSummary">
+      <div class="summary-row">
+        <span>Subtotal</span>
+        <span id="subtotal">₦0</span>
+      </div>
+      <div class="summary-row">
+        <span>Delivery Fee</span>
+        <span>₦500</span>
+      </div>
+      <div class="summary-row total">
+        <span>Total</span>
+        <span id="total">₦0</span>
+      </div>
+      <button class="checkout-btn" id="checkoutBtn" disabled>Place Order</button>
+    </div>
+  </div>
 
-  try {
-    const parsed = JSON.parse(raw);
-    const files = normalizeFiles(parsed?.files);
+  <footer>
+    © <span id="year"></span> QuickChop • Made in Nigeria
+  </footer>
 
-    const index = files.find(
-      (file) =>
-        cleanPath(file.path).toLowerCase() ===
-        "index.html"
-    );
+  <script>
+    // ============ DATA ============
+    const foods = [
+      { id: 1, name: "Jollof Rice & Chicken", category: "Rice", price: 3500, emoji: "🍛", rating: 4.8 },
+      { id: 2, name: "Fried Rice & Turkey", category: "Rice", price: 3800, emoji: "🍚", rating: 4.7 },
+      { id: 3, name: "Suya (Beef)", category: "Grills", price: 2500, emoji: "🥩", rating: 4.9 },
+      { id: 4, name: "Chicken Suya", category: "Grills", price: 2800, emoji: "🍗", rating: 4.6 },
+      { id: 5, name: "Shawarma", category: "Fast Food", price: 2200, emoji: "🌯", rating: 4.5 },
+      { id: 6, name: "Burger & Fries", category: "Fast Food", price: 3000, emoji: "🍔", rating: 4.4 },
+      { id: 7, name: "Pounded Yam & Egusi", category: "Swallow", price: 3200, emoji: "🥣", rating: 4.8 },
+      { id: 8, name: "Eba & Okro Soup", category: "Swallow", price: 2800, emoji: "🍲", rating: 4.6 },
+      { id: 9, name: "Chapman", category: "Drinks", price: 1200, emoji: "🍹", rating: 4.7 },
+      { id: 10, name: "Zobo", category: "Drinks", price: 800, emoji: "🧃", rating: 4.5 },
+      { id: 11, name: "Pepper Soup", category: "Grills", price: 3000, emoji: "🌶️", rating: 4.8 },
+      { id: 12, name: "Asun", category: "Grills", price: 3500, emoji: "🔥", rating: 4.9 },
+    ];
 
-    return index || null;
-  } catch {
-    return null;
-  }
-}
+    // ============ STATE ============
+    let cart = JSON.parse(localStorage.getItem("quickchop_cart") || "[]");
+    let currentCategory = "all";
+    let searchTerm = "";
 
-/* =========================================================
-   AI DOCTOR
-========================================================= */
-
-async function runDoctor(
-  html: string,
-  originalRequest: string
-) {
-  try {
-    const response = await fetch(
-      new URL("/api/doctor", "http://localhost")
-    );
-
-    return response;
-  } catch {
-    return null;
-  }
-}
-
-/* =========================================================
-   MAIN HANDLER
-========================================================= */
-
-export async function POST(req: Request) {
-  try {
-    /* =====================================================
-       CONFIG
-    ===================================================== */
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      return NextResponse.json(
-        {
-          error:
-            "Supabase environment variables are not configured.",
-        },
-        { status: 500 }
-      );
+    // ============ HELPERS ============
+    function saveCart() {
+      localStorage.setItem("quickchop_cart", JSON.stringify(cart));
     }
 
-    if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json(
-        {
-          error:
-            "OpenAI API key is not configured.",
-        },
-        { status: 500 }
-      );
+    function formatPrice(n) {
+      return "₦" + n.toLocaleString();
     }
 
-    /* =====================================================
-       AUTH
-    ===================================================== */
-
-    const authHeader =
-      req.headers.get("authorization");
-
-    if (!authHeader) {
-      return NextResponse.json(
-        {
-          error:
-            "Please log in before building.",
-        },
-        { status: 401 }
-      );
+    function getCartCount() {
+      return cart.reduce((sum, item) => sum + item.qty, 0);
     }
 
-    const supabase = createClient(
-      supabaseUrl,
-      supabaseAnonKey,
-      {
-        global: {
-          headers: {
-            Authorization: authHeader,
-          },
-        },
+    function getSubtotal() {
+      return cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+    }
+
+    // ============ RENDER FOODS ============
+    function renderFoods() {
+      const grid = document.getElementById("foodGrid");
+      let list = foods;
+
+      if (currentCategory !== "all") {
+        list = list.filter(f => f.category === currentCategory);
       }
-    );
-
-    const {
-      data: { user },
-      error: userError,
-    } =
-      await supabase.auth.getUser();
-
-    if (userError || !user) {
-      return NextResponse.json(
-        {
-          error:
-            "Your login session could not be verified.",
-        },
-        { status: 401 }
-      );
-    }
-
-    /* =====================================================
-       INPUT
-    ===================================================== */
-
-    const body = await req.json();
-
-    const projectId =
-      typeof body?.projectId === "string"
-        ? body.projectId.trim()
-        : "";
-
-    const originalRequest =
-      typeof body?.originalRequest === "string"
-        ? body.originalRequest.trim()
-        : "";
-
-    const plan = body?.plan;
-
-    if (!projectId || !originalRequest || !plan) {
-      return NextResponse.json(
-        {
-          error:
-            "Missing projectId, originalRequest or plan.",
-        },
-        { status: 400 }
-      );
-    }
-
-    /* =====================================================
-       LOAD PROJECT
-    ===================================================== */
-
-    const {
-      data: project,
-      error: projectError,
-    } = await supabase
-      .from("builder_projects")
-      .select("*")
-      .eq("id", projectId)
-      .eq("owner_id", user.id)
-      .single();
-
-    if (projectError || !project) {
-      return NextResponse.json(
-        {
-          error: "Project not found.",
-        },
-        { status: 404 }
-      );
-    }
-
-    const stages = Array.isArray(plan.buildStages)
-      ? plan.buildStages
-      : [];
-
-    const totalStages =
-      stages.length > 0
-        ? stages.length
-        : 6;
-
-    const currentStage = Math.max(
-      0,
-      Number(project.current_stage || 0)
-    );
-
-    const nextStage =
-      currentStage + 1;
-
-    /* =====================================================
-       ALREADY COMPLETE
-    ===================================================== */
-
-    if (nextStage > totalStages) {
-      return NextResponse.json({
-        success: true,
-        project,
-        completed: true,
-        files: normalizeFiles(
-          project.project_files
-        ),
-        continueBuild: false,
-        nextStage: null,
-        summary:
-          "Build already complete.",
-      });
-    }
-
-    const stageMeta =
-      stages[nextStage - 1] || {
-        name:
-          `Stage ${nextStage}`,
-        description:
-          "Continue building the requested application.",
-      };
-
-    /* =====================================================
-       EXISTING FILES
-    ===================================================== */
-
-    const existingFiles =
-      normalizeFiles(
-        project.project_files
-      );
-
-    const existingIndex =
-      getIndex(existingFiles);
-
-    /*
-      IMPORTANT:
-      We do NOT arbitrarily slice the existing application.
-
-      The application must be preserved.
-    */
-
-    const existingApplication =
-      existingIndex
-        ? `
-CURRENT APPLICATION:
-
-The following is the current master index.html.
-
-Continue this SAME application.
-Preserve working functionality.
-Improve it according to the current stage.
-
-${existingIndex.content}
-`
-        : `
-There is no existing application yet.
-
-Create the complete product requested by the user.
-`;
-
-    /* =====================================================
-       GENERATION
-    ===================================================== */
-
-    const systemPrompt =
-      buildSystemPrompt(nextStage);
-
-    const userPrompt = `
-USER'S ORIGINAL REQUEST:
-
-${originalRequest}
-
-PROJECT PLAN:
-
-${JSON.stringify(
-  plan,
-  null,
-  2
-)}
-
-CURRENT STAGE:
-
-Stage ${nextStage} of ${totalStages}
-
-Stage name:
-${stageMeta.name}
-
-Stage description:
-${stageMeta.description}
-
-${existingApplication}
-
-Build the actual requested product.
-
-Do not create a tutorial.
-
-Do not create a generic template.
-
-Do not remove working functionality.
-
-Return only valid JSON.
-`;
-
-    const completion =
-      await openai.chat.completions.create({
-        model: MODEL,
-        temperature: 0.25,
-        response_format: {
-          type: "json_object",
-        },
-        messages: [
-          {
-            role: "system",
-            content:
-              systemPrompt,
-          },
-          {
-            role: "user",
-            content:
-              userPrompt,
-          },
-        ],
-      });
-
-    const raw =
-      completion.choices?.[0]?.message?.content;
-
-    if (!raw) {
-      return NextResponse.json(
-        {
-          error:
-            "BOMBA AI returned an empty build response.",
-        },
-        { status: 500 }
-      );
-    }
-
-    /* =====================================================
-       PARSE
-    ===================================================== */
-
-    let result: any;
-
-    try {
-      result = JSON.parse(raw);
-    } catch {
-      return NextResponse.json(
-        {
-          error:
-            "BOMBA AI returned invalid JSON.",
-        },
-        { status: 500 }
-      );
-    }
-
-    const generatedFiles =
-      normalizeFiles(result?.files);
-
-    const generatedIndex =
-      generatedFiles.find(
-        (file) =>
-          cleanPath(file.path)
-            .toLowerCase() ===
-          "index.html"
-      );
-
-    if (!generatedIndex) {
-      return NextResponse.json(
-        {
-          error:
-            "BOMBA AI did not return index.html.",
-        },
-        { status: 500 }
-      );
-    }
-
-    /* =====================================================
-       GENERATION VALIDATION
-    ===================================================== */
-
-    const generatedValidation =
-      validateApp(
-        generatedIndex.content
-      );
-
-    if (!generatedValidation.valid) {
-      return NextResponse.json(
-        {
-          success: false,
-          retryable: true,
-          error:
-            `Generated application failed basic validation: ${generatedValidation.reason}`,
-        },
-        { status: 422 }
-      );
-    }
-
-    /* =====================================================
-       BUTTON DOCTOR
-    ===================================================== */
-
-    let repairedCode =
-      generatedIndex.content;
-
-    try {
-      const buttonFixed =
-        await runButtonDoctor(
-          repairedCode,
-          originalRequest
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        list = list.filter(f =>
+          f.name.toLowerCase().includes(term) ||
+          f.category.toLowerCase().includes(term)
         );
-
-      if (buttonFixed) {
-        const buttonValidation =
-          validateApp(
-            buttonFixed.content
-          );
-
-        if (buttonValidation.valid) {
-          repairedCode =
-            buttonFixed.content;
-        }
       }
-    } catch (buttonError) {
-      console.error(
-        "Button Doctor error:",
-        buttonError
-      );
 
-      /*
-        Button Doctor is a repair layer.
+      if (list.length === 0) {
+        grid.innerHTML = `<p style="grid-column:1/-1;text-align:center;color:#6c757d;padding:40px 0">No items found</p>`;
+        return;
+      }
 
-        If it fails, preserve the valid
-        generated application instead of
-        destroying the build.
-      */
+      grid.innerHTML = list.map(f => `
+        <div class="food-card">
+          <div class="food-img">${f.emoji}</div>
+          <div class="food-body">
+            <div class="food-name">${f.name}</div>
+            <div class="food-meta">⭐ ${f.rating} • ${f.category}</div>
+            <div class="food-price">${formatPrice(f.price)}</div>
+            <button class="add-btn" data-id="${f.id}">Add to Cart</button>
+          </div>
+        </div>
+      `).join("");
+
+      // Attach listeners
+      grid.querySelectorAll(".add-btn").forEach(btn => {
+        btn.addEventListener("click", () => addToCart(+btn.dataset.id));
+      });
     }
 
-    /* =====================================================
-       MERGE
-    ===================================================== */
+    // ============ CART LOGIC ============
+    function addToCart(id) {
+      const food = foods.find(f => f.id === id);
+      if (!food) return;
 
-    const repairedFiles =
-      generatedFiles.map(
-        (file) => {
-          if (
-            cleanPath(
-              file.path
-            ).toLowerCase() ===
-            "index.html"
-          ) {
-            return {
-              ...file,
-              content:
-                repairedCode,
-            };
-          }
-
-          return file;
-        }
-      );
-
-    const files =
-      mergeFiles(
-        existingFiles,
-        repairedFiles
-      );
-
-    const finalIndex =
-      getIndex(files);
-
-    if (!finalIndex) {
-      return NextResponse.json(
-        {
-          error:
-            "Final project does not contain index.html.",
-        },
-        { status: 500 }
-      );
+      const existing = cart.find(item => item.id === id);
+      if (existing) {
+        existing.qty += 1;
+      } else {
+        cart.push({ ...food, qty: 1 });
+      }
+      saveCart();
+      updateCartUI();
+      // small feedback
+      const btn = document.querySelector(`.add-btn[data-id="${id}"]`);
+      if (btn) {
+        const original = btn.textContent;
+        btn.textContent = "Added ✓";
+        btn.style.background = "#2a9d8f";
+        setTimeout(() => {
+          btn.textContent = original;
+          btn.style.background = "";
+        }, 800);
+      }
     }
 
-    /* =====================================================
-       FINAL BASIC VALIDATION
-    ===================================================== */
-
-    const finalValidation =
-      validateApp(
-        finalIndex.content
-      );
-
-    if (!finalValidation.valid) {
-      return NextResponse.json(
-        {
-          success: false,
-          retryable: true,
-          error:
-            `Final application validation failed: ${finalValidation.reason}`,
-        },
-        { status: 422 }
-      );
+    function changeQty(id, delta) {
+      const item = cart.find(i => i.id === id);
+      if (!item) return;
+      item.qty += delta;
+      if (item.qty <= 0) {
+        cart = cart.filter(i => i.id !== id);
+      }
+      saveCart();
+      updateCartUI();
     }
 
-    /* =====================================================
-       SAVE
-    ===================================================== */
+    function updateCartUI() {
+      // badge
+      document.getElementById("cartCount").textContent = getCartCount();
 
-    const completed =
-      nextStage >= totalStages;
+      // cart items
+      const container = document.getElementById("cartItems");
+      if (cart.length === 0) {
+        container.innerHTML = `<div class="empty-cart">Your cart is empty</div>`;
+        document.getElementById("checkoutBtn").disabled = true;
+      } else {
+        container.innerHTML = cart.map(item => `
+          <div class="cart-item">
+            <div style="font-size:1.8rem">${item.emoji}</div>
+            <div class="cart-item-info">
+              <div class="cart-item-name">${item.name}</div>
+              <div class="cart-item-price">${formatPrice(item.price)}</div>
+            </div>
+            <div class="qty-controls">
+              <button class="qty-btn" data-id="${item.id}" data-delta="-1">−</button>
+              <span>${item.qty}</span>
+              <button class="qty-btn" data-id="${item.id}" data-delta="1">+</button>
+            </div>
+          </div>
+        `).join("");
 
-    const {
-      data: updated,
-      error: updateError,
-    } = await supabase
-      .from("builder_projects")
-      .update({
-        project_name:
-          plan.projectName ||
-          project.project_name ||
-          "BOMBA Project",
+        container.querySelectorAll(".qty-btn").forEach(btn => {
+          btn.addEventListener("click", () => {
+            changeQty(+btn.dataset.id, +btn.dataset.delta);
+          });
+        });
+        document.getElementById("checkoutBtn").disabled = false;
+      }
 
-        build_plan:
-          plan,
-
-        project_files:
-          files,
-
-        current_stage:
-          nextStage,
-
-        total_stages:
-          totalStages,
-
-        status:
-          completed
-            ? "completed"
-            : "building",
-
-        is_completed:
-          completed,
-
-        is_paused:
-          false,
-      })
-      .eq("id", projectId)
-      .eq("owner_id", user.id)
-      .select()
-      .single();
-
-    if (updateError) {
-      console.error(
-        "Project update error:",
-        updateError
-      );
-
-      throw updateError;
+      // totals
+      const sub = getSubtotal();
+      document.getElementById("subtotal").textContent = formatPrice(sub);
+      document.getElementById("total").textContent = formatPrice(sub + (sub > 0 ? 500 : 0));
     }
 
-    /* =====================================================
-       RESPONSE
-    ===================================================== */
+    // ============ CART OPEN / CLOSE ============
+    function openCart() {
+      document.getElementById("cartOverlay").classList.add("open");
+      document.getElementById("cartDrawer").classList.add("open");
+    }
+    function closeCart() {
+      document.getElementById("cartOverlay").classList.remove("open");
+      document.getElementById("cartDrawer").classList.remove("open");
+    }
 
-    return NextResponse.json({
-      success: true,
+    // ============ CHECKOUT ============
+    function placeOrder() {
+      if (cart.length === 0) return;
+      cart = [];
+      saveCart();
+      updateCartUI();
+      closeCart();
+      document.querySelector(".section").style.display = "none";
+      document.querySelector(".categories").style.display = "none";
+      document.querySelector(".search-bar").style.display = "none";
+      document.getElementById("successScreen").classList.add("show");
+    }
 
-      project:
-        updated,
+    function backToMenu() {
+      document.getElementById("successScreen").classList.remove("show");
+      document.querySelector(".section").style.display = "block";
+      document.querySelector(".categories").style.display = "flex";
+      document.querySelector(".search-bar").style.display = "block";
+    }
 
-      stage: {
-        stageNumber:
-          nextStage,
+    // ============ EVENT LISTENERS ============
+    document.getElementById("openCartBtn").addEventListener("click", openCart);
+    document.getElementById("closeCartBtn").addEventListener("click", closeCart);
+    document.getElementById("cartOverlay").addEventListener("click", closeCart);
+    document.getElementById("checkoutBtn").addEventListener("click", placeOrder);
+    document.getElementById("backHomeBtn").addEventListener("click", backToMenu);
 
-        totalStages,
-
-        stageName:
-          stageMeta.name,
-
-        completed:
-          true,
-
-        summary:
-          result?.summary ||
-          `Stage ${nextStage} completed.`,
-      },
-
-      files,
-
-      completed,
-
-      /*
-        The frontend uses these values to
-        automatically start the next stage.
-      */
-      continueBuild:
-        !completed,
-
-      nextStage:
-        !completed
-          ? nextStage + 1
-          : null,
-
-      interactionRepair:
-        true,
-
-      summary:
-        result?.summary ||
-        `Stage ${nextStage} completed with interaction repair.`,
+    // Categories
+    document.getElementById("categories").addEventListener("click", (e) => {
+      if (e.target.classList.contains("cat-btn")) {
+        document.querySelectorAll(".cat-btn").forEach(b => b.classList.remove("active"));
+        e.target.classList.add("active");
+        currentCategory = e.target.dataset.cat;
+        renderFoods();
+      }
     });
-  } catch (error: any) {
-    console.error(
-      "BOMBA Builder error:",
-      error
-    );
 
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          error?.message ||
-          "Builder failed.",
-      },
-      { status: 500 }
-    );
-  }
-}
+    // Search
+    document.getElementById("searchInput").addEventListener("input", (e) => {
+      searchTerm = e.target.value.trim();
+      renderFoods();
+    });
+
+    // Year
+    document.getElementById("year").textContent = new Date().getFullYear();
+
+    // Init
+    renderFoods();
+    updateCartUI();
+  </script>
+</body>
+</html>
