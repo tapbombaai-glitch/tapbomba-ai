@@ -1592,23 +1592,102 @@ function openAuth() {
             </div>
           )}
 
-          {builderView === "files" && builderProject && (
-            <div style={styles.builderWorkspace}>
-              <div style={styles.workspaceHeader}>
-                <div>
-                  <div style={styles.smallGold}>PROJECT FILES</div>
-                  <h2 style={styles.workspaceTitle}>Files & Code</h2>
-                </div>
-              </div>
+           {builderView === "files" && builderProject && (
+  <div style={styles.builderWorkspace}>
+    <div style={styles.workspaceHeader}>
+      <div>
+        <div style={styles.smallGold}>PROJECT FILES</div>
+        <h2 style={styles.workspaceTitle}>Files & Code</h2>
+      </div>
+    </div>
 
-              <div style={styles.lockedFilesCard}>
-                <div style={styles.lockIcon}>🔒</div>
-                <h3 style={styles.lockedFilesCardH3}>SOURCE CODE LOCKED</h3>
-                <p style={styles.lockedFilesCardP}>
-                  BOMBA AI protects generated project source code and ZIP files
-                  from normal users. Preview and project use can be provided
-                  while source access remains protected.
-                </p>
+    <div style={styles.lockedFilesCard}>
+      <div style={styles.lockIcon}>🔓</div>
+
+      <h3 style={styles.lockedFilesCardH3}>
+        SOURCE CODE OPEN — TEST MODE
+      </h3>
+
+      <p style={styles.lockedFilesCardP}>
+        Source code and project files are temporarily open for testing.
+        The code lock will be restored after BOMBA AI is fully tested.
+      </p>
+
+      <div style={styles.lockedFileStatus}>
+        <span>Project files generated:</span>
+        <strong>
+          {projectFiles.length
+            ? " YES"
+            : currentStage > 0
+            ? " YES"
+            : " NOT YET"}
+        </strong>
+      </div>
+
+      <div style={styles.lockedFileStatus}>
+        <span>Source display:</span>
+        <strong> OPEN FOR TESTING</strong>
+      </div>
+
+      <div style={styles.lockedFileStatus}>
+        <span>ZIP export:</span>
+        <strong> OPEN FOR TESTING</strong>
+      </div>
+    </div>
+
+    {projectFiles.length > 0 && (
+      <div style={{ marginTop: 16 }}>
+        {projectFiles.map((file, index) => (
+          <div
+            key={`${file.name || "file"}-${index}`}
+            style={{
+              padding: 14,
+              marginBottom: 10,
+              border: "1px solid rgba(255,212,59,0.2)",
+              borderRadius: 12,
+              background: "#111",
+            }}
+          >
+            <div
+              style={{
+                color: "#FFD43B",
+                fontWeight: 700,
+                marginBottom: 8,
+              }}
+            >
+              {file.name || `File ${index + 1}`}
+            </div>
+
+            <pre
+              style={{
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                overflowX: "auto",
+                margin: 0,
+                padding: 12,
+                borderRadius: 8,
+                background: "#050505",
+                color: "#eee",
+                fontSize: 12,
+                lineHeight: 1.5,
+              }}
+            >
+              {file.content || ""}
+            </pre>
+          </div>
+        ))}
+      </div>
+    )}
+
+    <button
+      type="button"
+      onClick={() => setBuilderView("workspace")}
+      style={styles.workspaceButtonPrimary}
+    >
+      ← BACK TO WORKSPACE
+    </button>
+  </div>
+)}
 
                 {builderView === "files" && builderProject && (
   <div style={styles.builderWorkspace}>
